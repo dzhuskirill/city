@@ -1,0 +1,16 @@
+{
+  "name": "Квартал",
+  "short_name": "Квартал",
+  "description": "Одиночный бой в городском квартале: автомат, пистолет, нож, боты",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0e1116",
+  "theme_color": "#0e1116",
+  "lang": "ru",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
