@@ -19,7 +19,7 @@
   .hp .bar i { display: block; height: 100%; width: 100%; background: var(--ok); transition: width .15s; }
   .hp .bar i.heal { box-shadow: 0 0 12px 3px var(--ok); }
   .hp .n { font-size: 13px; color: var(--muted); margin-top: 4px; letter-spacing: .06em; text-transform: uppercase; }
-  .ammo { position: absolute; right: 18px; bottom: calc(110px + env(safe-area-inset-bottom)); text-align: right; font-variant-numeric: tabular-nums; }
+  .ammo { position: absolute; right: 100px; bottom: calc(196px + env(safe-area-inset-bottom)); text-align: right; font-variant-numeric: tabular-nums; }
   .ammo b { font-size: 34px; font-weight: 800; line-height: 1; }
   .ammo span { color: var(--muted); font-size: 14px; }
   .ammo .w { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
@@ -42,6 +42,7 @@
   #fire { right: 24px; bottom: calc(24px + env(safe-area-inset-bottom)); width: 82px; height: 82px; font-size: 14px; }
   #reload { right: 122px; bottom: calc(34px + env(safe-area-inset-bottom)); width: 58px; height: 58px; }
   #fs { left: 18px; top: calc(14px + env(safe-area-inset-top)); width: 40px; height: 40px; font-size: 16px; }
+  #jump { right: 122px; bottom: calc(112px + env(safe-area-inset-bottom)); width: 58px; height: 58px; font-size: 22px; }
   #swap { right: 30px; bottom: calc(190px + env(safe-area-inset-bottom)); width: 58px; height: 58px; }
   #stick { position: fixed; left: 0; bottom: 0; width: 50vw; height: 60vh; pointer-events: none; }
   #stick .base { position: absolute; width: 110px; height: 110px; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); background: rgba(255,255,255,.06); display: none; transform: translate(-50%,-50%); }
@@ -55,6 +56,9 @@
   .overlay .big { font-size: 54px; font-weight: 900; line-height: 1; }
   .overlay button { font: inherit; font-weight: 700; font-size: 18px; padding: 14px 34px; border-radius: 999px; border: 0; background: var(--accent); color: #1a1200; margin-top: 10px; }
   .overlay button.sec { background: #2a2f36; color: var(--ink); }
+  .maps { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .maps button { font: inherit; font-size: 14px; font-weight: 600; padding: 8px 16px; border-radius: 999px; border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.06); color: var(--ink); margin: 0; }
+  .maps button.on { background: var(--accent); color: #1a1200; border-color: var(--accent); }
   .overlay .row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 </style>
 </head>
@@ -71,10 +75,12 @@
 <div class="btn" id="fire">огонь</div>
 <div class="btn" id="reload">R</div>
 <div class="btn" id="swap">⇄</div>
+<div class="btn" id="jump">↑</div>
 <div class="btn" id="fs">⛶</div>
 <div class="overlay" id="start">
   <h1>Квартал</h1>
-  <div class="sub">Одиночный бой в городском квартале. Левая половина экрана — ходьба (виртуальный стик), правая — прицел (тяните), кнопка «Огонь». Оружие: автомат, пистолет и нож (⇄) — с ножом бегаешь быстрее, удар в спину валит сразу. Аптечки (белые ящики с крестом) стоят на площади и на краях города: +50 HP. Продержитесь 3 минуты и выбейте как можно больше противников.</div>
+  <div class="sub">Одиночный бой в городском квартале. Левая половина экрана — ходьба (виртуальный стик), правая — прицел (тяните), кнопка «Огонь». Оружие: автомат, пистолет и нож (⇄) — с ножом бегаешь быстрее, удар в спину валит сразу. Кнопка ↑ — прыжок: можно запрыгнуть на ящики, машины и контейнеры. С ножом кнопка R меняет нож: тактический, керамбит, бабочка. Аптечки (белые ящики с крестом): +50 HP. Продержитесь 3 минуты и выбейте как можно больше противников.</div>
+  <div class="maps" id="maps"></div>
   <button type="button" id="go">В бой</button>
   <div class="sub" style="font-size:12px">Чёрный экран? <a href="?safe=1" style="color:var(--accent)">Облегчённый режим</a> · <a href="?debug=1" style="color:var(--muted)">диагностика</a></div>
 </div>
@@ -122,9 +128,10 @@
   let seed = 7; const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
 
   // ── город: сетка кварталов, здания с окнами, укрытия ──────────────────
-  const SIZE = 200, BLOCK = 40, STREET = 14;
-  const solids = [];                                      // AABB для коллизий и пуль: {x1,z1,x2,z2,h}
-  const colliders = [];                                   // Mesh для raycast
+  const world = new THREE.Group(); scene.add(world);
+  let solids = [];                                        // AABB для коллизий и пуль: {x1,z1,x2,z2,y0,h}
+  let colliders = [];                                     // Mesh для raycast
+  let MAP = null;                                         // {id, size, spawn:[x,z,yaw], kits:[[x,z]], center:[x,z]}
   function winTex(base, w, h) {
     const c = document.createElement('canvas'); c.width = 128; c.height = 256; const g = c.getContext('2d');
     g.fillStyle = base; g.fillRect(0, 0, 128, 256);
@@ -135,80 +142,130 @@
     const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(w / 8, h / 8); t.encoding = THREE.sRGBEncoding; return t;
   }
   const PALETTE = ['#8e8f93', '#a3968a', '#7b8a99', '#b0a48f', '#6f7f8a', '#9c8f86'];
+  const lam = c => new THREE.MeshLambertMaterial({ color: c });
   function addBox(x, z, w, d, h, mat, y = 0, solid = true, cast = true) {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y + h / 2, z); m.castShadow = cast; m.receiveShadow = true; scene.add(m);
-    if (solid) { solids.push({ x1: x - w / 2, z1: z - d / 2, x2: x + w / 2, z2: z + d / 2, h: y + h }); colliders.push(m); }
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y + h / 2, z); m.castShadow = cast; m.receiveShadow = true; world.add(m);
+    if (solid) { solids.push({ x1: x - w / 2, z1: z - d / 2, x2: x + w / 2, z2: z + d / 2, y0: y, h: y + h }); colliders.push(m); }
     return m;
   }
-  // земля и дороги
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(SIZE * 3, SIZE * 3), new THREE.MeshLambertMaterial({ color: 0x3b3f45 }));
-  ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
-  const sidewalkM = new THREE.MeshLambertMaterial({ color: 0x4d5156 });
+  function addGround(size, color) { const g = new THREE.Mesh(new THREE.PlaneGeometry(size * 3, size * 3), lam(color)); g.rotation.x = -Math.PI / 2; g.receiveShadow = true; world.add(g); }
+  function addPad(x, z, w, d, color, y = 0.1) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.2, d), lam(color)); m.position.set(x, y, z); m.receiveShadow = true; world.add(m); }
+  const wallM = lam(0x55606a);
+  function addWalls(size, h = 6) { const half = size / 2; for (const [x, z, w, d] of [[0, -half - 3, size + 12, 2], [0, half + 3, size + 12, 2], [-half - 3, 0, 2, size + 12], [half + 3, 0, 2, size + 12]]) addBox(x, z, w, d, h, wallM); }
   const lineM = new THREE.MeshBasicMaterial({ color: 0xe8e2c0 });
-  const half = SIZE / 2, cells = SIZE / (BLOCK + STREET);
-  for (let i = 0; i < cells; i++) for (let j = 0; j < cells; j++) {
-    const cx = -half + STREET / 2 + BLOCK / 2 + i * (BLOCK + STREET), cz = -half + STREET / 2 + BLOCK / 2 + j * (BLOCK + STREET);
-    // тротуар квартала
-    const sw = new THREE.Mesh(new THREE.BoxGeometry(BLOCK + 3, 0.2, BLOCK + 3), sidewalkM); sw.position.set(cx, 0.1, cz); sw.receiveShadow = true; scene.add(sw);
-    if (i === 1 && j === 1) continue;                     // центральная площадь — открытая
-    // 2–4 здания на квартал
-    const n = 2 + Math.floor(rnd() * 3);
-    for (let k = 0; k < n; k++) {
-      const w = 10 + rnd() * 14, d = 10 + rnd() * 14, h = 8 + rnd() * 22;
-      const bx = cx + (rnd() - 0.5) * (BLOCK - w - 4), bz = cz + (rnd() - 0.5) * (BLOCK - d - 4);
-      const base = PALETTE[Math.floor(rnd() * PALETTE.length)];
-      const mat = new THREE.MeshLambertMaterial({ map: winTex(base, w, h) });
-      addBox(bx, bz, w, d, h, mat);
-      if (rnd() < 0.5) addBox(bx, bz, w * 0.5, d * 0.5, 2.5, new THREE.MeshLambertMaterial({ color: 0x6b6f75 }), h, false, true);  // надстройка
-    }
-  }
-  // разметка улиц
-  for (let i = 0; i <= cells; i++) {
-    const p = -half + i * (BLOCK + STREET) + STREET / 2 - (BLOCK + STREET) / 2 + (BLOCK + STREET) / 2;
-    const c = -half + i * (BLOCK + STREET);
-    for (let s = -half; s < half; s += 6) {
-      const l1 = new THREE.Mesh(new THREE.PlaneGeometry(3, 0.3), lineM); l1.rotation.x = -Math.PI / 2; l1.position.set(s, 0.02, c); scene.add(l1);
-      const l2 = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 3), lineM); l2.rotation.x = -Math.PI / 2; l2.position.set(c, 0.02, s); scene.add(l2);
-    }
-  }
-  // укрытия на улицах и площади: машины, контейнеры, бетонные блоки, фонари
+  function addLine(x, z, w, d) { const l = new THREE.Mesh(new THREE.PlaneGeometry(w, d), lineM); l.rotation.x = -Math.PI / 2; l.position.set(x, 0.02, z); world.add(l); }
   const carColors = [0xc0392b, 0x2e86de, 0xf1f2f6, 0x2f3542, 0xf9ca24];
   function car(x, z, rot) {
     const g = new THREE.Group(); const col = carColors[Math.floor(rnd() * carColors.length)];
-    const body = new THREE.Mesh(new THREE.BoxGeometry(4.4, 1.1, 1.9), new THREE.MeshLambertMaterial({ color: col })); body.position.y = 0.75; body.castShadow = true; g.add(body);
-    const cab = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.9, 1.7), new THREE.MeshLambertMaterial({ color: 0x1f2630 })); cab.position.set(-0.2, 1.7, 0); cab.castShadow = true; g.add(cab);
-    for (const [wx, wz] of [[-1.4, -0.9], [-1.4, 0.9], [1.4, -0.9], [1.4, 0.9]]) { const wh = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.3, 10), new THREE.MeshLambertMaterial({ color: 0x111 })); wh.rotation.x = Math.PI / 2; wh.position.set(wx, 0.36, wz); g.add(wh); }
-    g.position.set(x, 0, z); g.rotation.y = rot; scene.add(g);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(4.4, 1.1, 1.9), lam(col)); body.position.y = 0.75; body.castShadow = true; g.add(body);
+    const cab = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.9, 1.7), lam(0x1f2630)); cab.position.set(-0.2, 1.7, 0); cab.castShadow = true; g.add(cab);
+    for (const [wx, wz] of [[-1.4, -0.9], [-1.4, 0.9], [1.4, -0.9], [1.4, 0.9]]) { const wh = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.3, 10), lam(0x111111)); wh.rotation.x = Math.PI / 2; wh.position.set(wx, 0.36, wz); g.add(wh); }
+    g.position.set(x, 0, z); g.rotation.y = rot; world.add(g);
     const w = Math.abs(Math.cos(rot)) > 0.5 ? 4.4 : 1.9, d = Math.abs(Math.cos(rot)) > 0.5 ? 1.9 : 4.4;
-    solids.push({ x1: x - w / 2, z1: z - d / 2, x2: x + w / 2, z2: z + d / 2, h: 2.2 }); colliders.push(body); colliders.push(cab);
+    // капот 1.3 м — на него можно запрыгнуть, кабина 2.2 м
+    solids.push({ x1: x - w / 2, z1: z - d / 2, x2: x + w / 2, z2: z + d / 2, y0: 0, h: 1.3 }); colliders.push(body); colliders.push(cab);
   }
-  const contM = [new THREE.MeshLambertMaterial({ color: 0x8e3b2f }), new THREE.MeshLambertMaterial({ color: 0x2c6e49 }), new THREE.MeshLambertMaterial({ color: 0x264653 })];
-  for (let i = 0; i < cells; i++) for (let j = 0; j <= cells; j++) {
-    // машины вдоль улиц (горизонтальные и вертикальные)
-    const sx = -half + i * (BLOCK + STREET) + STREET / 2 + 6 + rnd() * (BLOCK - 12), sz = -half + j * (BLOCK + STREET) - 4;
-    if (rnd() < 0.7) car(sx, sz + (rnd() < 0.5 ? 0 : 8), 0);
-    const vx = -half + j * (BLOCK + STREET) + 4, vz = -half + i * (BLOCK + STREET) + STREET / 2 + 6 + rnd() * (BLOCK - 12);
-    if (rnd() < 0.6) car(vx + (rnd() < 0.5 ? 0 : -8), vz, Math.PI / 2);
+  const contM = [lam(0x8e3b2f), lam(0x2c6e49), lam(0x264653), lam(0xb7791f), lam(0x4a4e69)];
+  const crateM = lam(0xa0a0a0), woodM = lam(0x9a7b4f), poleM = lam(0x2a2f36);
+  function lamp(x, z) { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 7, 6), poleM); p.position.set(x, 3.5, z); p.castShadow = true; world.add(p); }
+  function container(x, z, along, y = 0, m) { addBox(x, z, along ? 12 : 2.4, along ? 2.4 : 12, 2.6, m || contM[Math.floor(rnd() * contM.length)], y); }
+  function crate(x, z, s = 1.2) { addBox(x, z, s, s, s, woodM); }
+  function tree(x, z) { const t = addBox(x, z, 0.5, 0.5, 3, lam(0x5b3a1e)); const c = new THREE.Mesh(new THREE.SphereGeometry(2.4, 8, 6), lam(0x3f7d3a)); c.position.set(x, 4.2, z); c.castShadow = true; world.add(c); }
+
+  const MAPS = {
+    city: { name: 'Квартал', seed: 7, build() {
+      const SIZE = 200, BLOCK = 40, STREET = 14, half = SIZE / 2, cells = SIZE / (BLOCK + STREET);
+      addGround(SIZE, 0x3b3f45);
+      for (let i = 0; i < cells; i++) for (let j = 0; j < cells; j++) {
+        const cx = -half + STREET / 2 + BLOCK / 2 + i * (BLOCK + STREET), cz = -half + STREET / 2 + BLOCK / 2 + j * (BLOCK + STREET);
+        addPad(cx, cz, BLOCK + 3, BLOCK + 3, 0x4d5156);
+        if (i === 1 && j === 1) continue;                 // центральная площадь — открытая
+        const n = 2 + Math.floor(rnd() * 3);
+        for (let k = 0; k < n; k++) {
+          const w = 10 + rnd() * 14, d = 10 + rnd() * 14, h = 8 + rnd() * 22;
+          const bx = cx + (rnd() - 0.5) * (BLOCK - w - 4), bz = cz + (rnd() - 0.5) * (BLOCK - d - 4);
+          addBox(bx, bz, w, d, h, new THREE.MeshLambertMaterial({ map: winTex(PALETTE[Math.floor(rnd() * PALETTE.length)], w, h) }));
+          if (rnd() < 0.5) addBox(bx, bz, w * 0.5, d * 0.5, 2.5, lam(0x6b6f75), h, false, true);
+        }
+      }
+      for (let i = 0; i <= cells; i++) { const c = -half + i * (BLOCK + STREET); for (let s = -half; s < half; s += 6) { addLine(s, c, 3, 0.3); addLine(c, s, 0.3, 3); } }
+      for (let i = 0; i < cells; i++) for (let j = 0; j <= cells; j++) {
+        const sx = -half + i * (BLOCK + STREET) + STREET / 2 + 6 + rnd() * (BLOCK - 12), sz = -half + j * (BLOCK + STREET) - 4;
+        if (rnd() < 0.7) car(sx, sz + (rnd() < 0.5 ? 0 : 8), 0);
+        const vx = -half + j * (BLOCK + STREET) + 4, vz = -half + i * (BLOCK + STREET) + STREET / 2 + 6 + rnd() * (BLOCK - 12);
+        if (rnd() < 0.6) car(vx + (rnd() < 0.5 ? 0 : -8), vz, Math.PI / 2);
+      }
+      const pc = [-half + STREET / 2 + BLOCK / 2 + (BLOCK + STREET), -half + STREET / 2 + BLOCK / 2 + (BLOCK + STREET)];
+      for (let k = 0; k < 9; k++) {
+        const a = k * 0.7 + 0.3, r = 8 + (k % 3) * 5, x = pc[0] + Math.cos(a) * r, z = pc[1] + Math.sin(a) * r;
+        if (k % 3 === 0) { container(x, z, true, 0, contM[k % 3]); crate(x + 6.8, z); crate(x - 6.8, z); } else addBox(x, z, 2.2, 1.2, 1.1, crateM);
+      }
+      for (let i = 0; i <= cells; i++) for (let j = 0; j <= cells; j++) lamp(-half + i * (BLOCK + STREET) + STREET / 2 - 1.5, -half + j * (BLOCK + STREET) + STREET / 2 - 1.5);
+      addWalls(SIZE);
+      return { size: SIZE, spawn: [-half + STREET / 2 + 6, -half + STREET / 2 + 6, -Math.PI * 0.75], center: pc,
+        kits: [[pc[0], pc[1]], [-half + STREET / 2 + 2, 0], [half - STREET / 2 - 2, 0], [0, -half + STREET / 2 + 2], [0, half - STREET / 2 - 2]] };
+    } },
+    port: { name: 'Порт', seed: 21, build() {
+      const SIZE = 150, half = SIZE / 2;
+      addGround(SIZE, 0x565a5e);
+      // причальная кромка и «вода» с одной стороны
+      addPad(0, half + 20, SIZE + 12, 40, 0x2b4a63, -0.3); addBox(0, half - 1, SIZE, 0.6, 0.5, lam(0xc9a227));
+      // ряды контейнеров: два яруса, у некоторых — ящики-ступеньки
+      for (let r = -2; r <= 2; r++) for (let c = -2; c <= 2; c++) {
+        if (r === 0 && c === 0) continue;
+        const x = c * 28, z = r * 22;
+        container(x, z, true); if (rnd() < 0.5) container(x + 13, z, true);
+        if (rnd() < 0.6) container(x + (rnd() < 0.5 ? 0 : 13), z, true, 2.6);
+        if (rnd() < 0.7) { crate(x + (rnd() < 0.5 ? 7.2 : -7.2), z + (rnd() < 0.5 ? 1.9 : -1.9)); }
+        if (rnd() < 0.4) { crate(x + 3, z + 2.4, 1.2); crate(x + 3, z + 3.6, 2.4); }
+      }
+      // склад и краны
+      addBox(-50, -55, 34, 14, 8, lam(0x7d8791)); addBox(-50, -55, 34, 14, 0.3, lam(0x556068), 8, false);
+      for (const kx of [-30, 30]) { addBox(kx, half - 8, 2, 2, 22, lam(0xd35400)); addBox(kx + 4, half - 8, 2, 2, 22, lam(0xd35400)); addBox(kx + 2, half - 20, 3, 30, 1.6, lam(0xd35400), 22, false); }
+      // грузовики
+      car(-8, 40, Math.PI / 2); car(-8, 32, Math.PI / 2); car(50, -40, 0);
+      for (let i = -2; i <= 2; i++) { lamp(i * 30, -half + 3); lamp(i * 30, half - 3); }
+      addWalls(SIZE, 4);
+      return { size: SIZE, spawn: [-half + 8, -half + 8, -Math.PI * 0.75], center: [0, 0],
+        kits: [[0, 0], [-half + 6, 0], [half - 6, 0], [0, -half + 6], [50, 55]] };
+    } },
+    yard: { name: 'Двор', seed: 42, build() {
+      const SIZE = 120, half = SIZE / 2;
+      addGround(SIZE, 0x4a4d52);
+      addPad(0, 0, 60, 40, 0x6f8f5a, 0.05);                                    // газон
+      // периметр — пятиэтажки с арками-проходами по углам
+      for (const [x, z, w, d] of [[0, -half + 7, 80, 12], [0, half - 7, 80, 12], [-half + 7, 0, 12, 70], [half - 7, 0, 12, 70]]) addBox(x, z, w, d, 16, new THREE.MeshLambertMaterial({ map: winTex('#b0a48f', w, 16) }));
+      // гаражи: ряд с ящиками-ступеньками, на крышу можно залезть
+      for (let i = -3; i <= 3; i++) { addBox(i * 6.2, -32, 6, 4.5, 2.6, lam(i % 2 ? 0x8a6d3b : 0x6d6d6d)); }
+      crate(-22.5, -28.5); crate(22.5, -28.5); crate(0, -28.5);
+      // трансформаторная будка, киоск, детская площадка
+      addBox(30, 25, 4, 4, 3.2, lam(0x9aa0a6)); crate(33.2, 25, 1.2); crate(34.4, 25, 2.4);
+      addBox(-30, 25, 5, 3, 3, lam(0x2e86de)); addBox(-30, 25, 6, 4, 0.3, lam(0x1b4f72), 3, false);
+      for (const [x, z] of [[-8, 8], [8, 8], [0, 14]]) addBox(x, z, 1.4, 1.4, 0.6, lam(0xd35400));
+      addBox(0, 6, 4, 0.4, 2.2, lam(0xf1c40f)); addBox(0, 6, 5, 2, 0.15, lam(0xf1c40f), 2.2, false);
+      // лавочки, деревья, машины
+      for (const [x, z] of [[-20, 0], [20, 0], [-20, 15], [20, 15]]) addBox(x, z, 2.4, 0.6, 0.5, woodM);
+      for (const [x, z] of [[-40, -30], [40, -30], [-40, 30], [40, 30], [-12, -12], [12, -12]]) tree(x, z);
+      for (let i = -2; i <= 2; i++) car(i * 7, 40, Math.PI / 2);
+      car(-42, 0, 0); car(42, 10, 0);
+      for (const [x, z] of [[-25, -20], [25, -20], [-25, 20], [25, 20]]) lamp(x, z);
+      addWalls(SIZE, 2.5);
+      return { size: SIZE, spawn: [-half + 14, half - 14, -Math.PI / 4], center: [0, 0],
+        kits: [[0, -20], [-45, -45], [45, 45], [45, -45], [-45, 45]] };
+    } },
+  };
+  function buildMap(id) {
+    while (world.children.length) world.remove(world.children[0]);
+    solids = []; colliders = []; seed = MAPS[id].seed;
+    MAP = MAPS[id].build(); MAP.id = id;
+    for (const k of kits) scene.remove(k.g); kits.length = 0;
+    for (const [x, z] of MAP.kits) medkit(x, z);
+    sc.left = -MAP.size * 0.6; sc.right = MAP.size * 0.6; sc.top = MAP.size * 0.6; sc.bottom = -MAP.size * 0.6; sun.shadow.camera.updateProjectionMatrix();
   }
-  // площадь: контейнеры и бетонные блоки как укрытия
-  const plazaC = [-half + STREET / 2 + BLOCK / 2 + (BLOCK + STREET), -half + STREET / 2 + BLOCK / 2 + (BLOCK + STREET)];
-  for (let k = 0; k < 9; k++) {
-    const a = k * 0.7 + 0.3, r = 8 + (k % 3) * 5;
-    const x = plazaC[0] + Math.cos(a) * r, z = plazaC[1] + Math.sin(a) * r;
-    if (k % 3 === 0) addBox(x, z, 6, 2.4, 2.6, contM[k % 3]); else addBox(x, z, 2.2, 1.2, 1.1, new THREE.MeshLambertMaterial({ color: 0xa0a0a0 }));
-  }
-  // фонари
-  const poleM = new THREE.MeshLambertMaterial({ color: 0x2a2f36 });
-  for (let i = 0; i <= cells; i++) for (let j = 0; j <= cells; j++) {
-    const x = -half + i * (BLOCK + STREET) + STREET / 2 - 1.5, z = -half + j * (BLOCK + STREET) + STREET / 2 - 1.5;
-    const p = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 7, 6), poleM); p.position.set(x, 3.5, z); p.castShadow = true; scene.add(p);
-  }
-  // граница мира
-  const wallM = new THREE.MeshLambertMaterial({ color: 0x55606a });
-  for (const [x, z, w, d] of [[0, -half - 3, SIZE + 12, 2], [0, half + 3, SIZE + 12, 2], [-half - 3, 0, 2, SIZE + 12], [half + 3, 0, 2, SIZE + 12]]) addBox(x, z, w, d, 6, wallM);
 
   // ── игрок ─────────────────────────────────────────────────────────────
-  const P = { x: -half + STREET / 2 + 6, z: -half + STREET / 2 + 6, yaw: Math.PI / 4, pitch: 0, hp: 100, r: 0.45, speed: 6.5 };
+  const P = { x: 0, y: 0, z: 0, vy: 0, grounded: true, yaw: 0, pitch: 0, hp: 100, r: 0.45, speed: 6.5 };
+  const JUMP_V = 8, GRAV = 22, STEP = 0.45, HEAD = 1.7;
   const WEAPONS = [
     { name: 'автомат', mag: 30, rest: 90, dmg: 24, rpm: 640, spread: 0.022, reload: 1.9, auto: true, kick: 0.012 },
     { name: 'пистолет', mag: 12, rest: 48, dmg: 34, rpm: 300, spread: 0.010, reload: 1.3, auto: false, kick: 0.02 },
@@ -217,15 +274,24 @@
   const ammo = WEAPONS.map(w => ({ mag: w.mag, rest: w.rest }));
   let wi = 0, cooldown = 0, reloading = 0, firing = false, kills = 0, timeLeft = 180, running = false;
   let recoil = 0, kickPitch = 0;
-  function movePlayer(dx, dz) {
-    // скользящая коллизия с AABB — по осям отдельно
-    const tryAxis = (nx, nz) => {
-      for (const s of solids) { if (nx + P.r > s.x1 && nx - P.r < s.x2 && nz + P.r > s.z1 && nz - P.r < s.z2) return false; }
-      return true;
-    };
-    if (tryAxis(P.x + dx, P.z)) P.x += dx;
-    if (tryAxis(P.x, P.z + dz)) P.z += dz;
+  function movePlayer(dx, dz, dt) {
+    // скользящая коллизия с AABB по осям; блок мешает, если он выше уровня шага и ниже головы
+    const feet = P.y, head = P.y + HEAD;
+    const blocked = (nx, nz) => solids.some(s => nx + P.r > s.x1 && nx - P.r < s.x2 && nz + P.r > s.z1 && nz - P.r < s.z2 && s.h > feet + STEP && s.y0 < head);
+    if (!blocked(P.x + dx, P.z)) P.x += dx;
+    if (!blocked(P.x, P.z + dz)) P.z += dz;
+    // опора — самая высокая крыша под ногами в пределах шага; потолок — нижняя грань блока над головой
+    let support = 0, ceil = 1e9;
+    for (const s of solids) {
+      if (!(P.x + P.r > s.x1 && P.x - P.r < s.x2 && P.z + P.r > s.z1 && P.z - P.r < s.z2)) continue;
+      if (s.h <= feet + STEP && s.h > support) support = s.h;
+      if (s.y0 >= feet + STEP && s.y0 < ceil) ceil = s.y0;
+    }
+    P.vy -= GRAV * dt; P.y += P.vy * dt;
+    if (P.y + HEAD > ceil) { P.y = ceil - HEAD; P.vy = Math.min(0, P.vy); }
+    if (P.y <= support) { if (!P.grounded && P.vy < -4) sfx.land(); P.y = support; P.vy = 0; P.grounded = true; } else P.grounded = false;
   }
+  function jump() { if (running && P.grounded) { P.vy = JUMP_V; P.grounded = false; } }
   function wallHit(from, to) {
     // есть ли стена между точками (для ботов и пуль): луч против коллайдеров
     ray.set(from, to.clone().sub(from).normalize()); ray.far = from.distanceTo(to);
@@ -248,16 +314,38 @@
   const pGrip = new THREE.Mesh(new THREE.BoxGeometry(0.036, 0.11, 0.05), gunM); pGrip.position.set(0, -0.07, 0.02); pGrip.rotation.x = -0.28; pistolG.add(pGrip);
   const pGuard = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.05, 0.02), gunM2); pGuard.position.set(0, -0.04, -0.06); pistolG.add(pGuard);
   const pMuzzle = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.03, 8), gunM); pMuzzle.rotation.x = Math.PI / 2; pMuzzle.position.set(0, 0.03, -0.2); pistolG.add(pMuzzle);
-  // нож
+  // ножи: три варианта, R переключает
+  const KNIVES = [
+    { name: 'нож', dmg: 55, rpm: 110, range: 2.4 },
+    { name: 'керамбит', dmg: 42, rpm: 170, range: 2.1 },
+    { name: 'бабочка', dmg: 65, rpm: 95, range: 2.6 },
+  ];
+  let ki = 0;
+  const steelM = lam(0xdfe6ee), handleM = lam(0x2b1f14), goldM = lam(0xc9a227);
   const knifeG = new THREE.Group(); gun.add(knifeG);
-  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.05, 0.3), new THREE.MeshLambertMaterial({ color: 0xdfe6ee })); blade.position.set(0, 0.01, -0.3); knifeG.add(blade);
-  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.045, 0.14), new THREE.MeshLambertMaterial({ color: 0x2b1f14 })); grip.position.set(0, 0, -0.08); knifeG.add(grip);
+  const knifeModels = [new THREE.Group(), new THREE.Group(), new THREE.Group()]; knifeModels.forEach(m => knifeG.add(m));
+  { const m = knifeModels[0];                                                    // тактический: прямой клинок
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.05, 0.3), steelM); blade.position.set(0, 0.01, -0.3); m.add(blade);
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.06, 4), steelM); tip.rotation.x = -Math.PI / 2; tip.rotation.y = Math.PI / 4; tip.position.set(0, 0.01, -0.48); m.add(tip);
+    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.045, 0.14), handleM); grip.position.set(0, 0, -0.08); m.add(grip); }
+  { const m = knifeModels[1];                                                    // керамбит: изогнутый клинок и кольцо
+    const arc = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.012, 5, 14, Math.PI * 0.85), steelM); arc.rotation.y = Math.PI / 2; arc.rotation.z = -0.2; arc.position.set(0, -0.1, -0.24); arc.scale.set(1, 1, 2.2); m.add(arc);
+    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.04, 0.13), handleM); grip.position.set(0, 0.01, -0.06); grip.rotation.x = 0.25; m.add(grip);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.006, 6, 14), goldM); ring.rotation.y = Math.PI / 2; ring.position.set(0, 0.02, 0.03); m.add(ring); }
+  { const m = knifeModels[2];                                                    // бабочка: клинок и две половины рукояти
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.045, 0.26), steelM); blade.position.set(0, 0.01, -0.28); m.add(blade);
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.022, 0.05, 4), steelM); tip.rotation.x = -Math.PI / 2; tip.rotation.y = Math.PI / 4; tip.position.set(0, 0.01, -0.43); m.add(tip);
+    for (const sx of [-1, 1]) { const h = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.042, 0.17), goldM); h.position.set(sx * 0.012, 0, -0.07); h.rotation.y = sx * 0.06; m.add(h); }
+    const pivot = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.04, 8), steelM); pivot.rotation.z = Math.PI / 2; pivot.position.set(0, 0, -0.15); m.add(pivot); }
+  let knifeFlip = 0;
+  function knifeLayout() { knifeModels.forEach((m, i) => m.visible = i === ki); Object.assign(WEAPONS[2], KNIVES[ki]); }
+  function nextKnife() { ki = (ki + 1) % KNIVES.length; knifeLayout(); knifeFlip = 1; cooldown = 0.35; sfx.click(); updateAmmo(); }
   const flash = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), new THREE.MeshBasicMaterial({ color: 0xffd27a })); flash.position.set(0, 0.03, -0.6); flash.visible = false; gun.add(flash);
   camera.add(gun); scene.add(camera);
   const GUN_POS = [[0.26, -0.22, -0.5], [0.2, -0.16, -0.32], [0.26, -0.22, -0.5]];
   function gunLayout() { const w = WEAPONS[wi]; const k = !!w.melee; rifleG.visible = wi === 0; pistolG.visible = wi === 1; knifeG.visible = k;
     flash.position.set(0, 0.03, wi === 1 ? -0.24 : -0.6); gun.position.set(...GUN_POS[wi]); gun.rotation.set(0, 0, k ? -0.35 : 0); $('fire').textContent = k ? 'удар' : 'огонь'; }
-  gunLayout();
+  knifeLayout(); gunLayout();
 
   // ── аптечки: белый ящик с красным крестом, +50 HP, возвращается через 60 с ─
   const kits = [];
@@ -272,14 +360,11 @@
     g.position.set(x, 0.5, z); scene.add(g);
     kits.push({ g, x, z, t: 0, on: true });
   }
-  // точки: площадь и по одной на перекрёстках/тротуарах в разных частях города
-  const kitPts = [[plazaC[0], plazaC[1]], [-half + STREET / 2 + 2, 0], [half - STREET / 2 - 2, 0], [0, -half + STREET / 2 + 2], [0, half - STREET / 2 - 2]];
-  for (const [x, z] of kitPts) medkit(x, z);
   function kitsStep(dt, tm) {
     for (const k of kits) {
       if (!k.on) { k.t -= dt; if (k.t <= 0) { k.on = true; k.g.visible = true; } continue; }
       k.g.rotation.y = tm * 1.2; k.g.position.y = 0.5 + Math.sin(tm * 2.5) * 0.08;
-      if (Math.hypot(P.x - k.x, P.z - k.z) < 1.3 && P.hp < 100) {
+      if (Math.hypot(P.x - k.x, P.z - k.z) < 1.3 && P.y < 1 && P.hp < 100) {
         P.hp = Math.min(100, P.hp + 50); k.on = false; k.g.visible = false; k.t = 60; sfx.heal();
         $('hpbar').classList.add('heal'); setTimeout(() => $('hpbar').classList.remove('heal'), 500);
         if (navigator.vibrate) navigator.vibrate([20, 40, 20]);
@@ -296,16 +381,16 @@
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 10, 8), botMat2); head.position.y = 1.72; head.castShadow = true; g.add(head);
     const arm = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.7), gunM); arm.position.set(0.3, 1.25, -0.4); g.add(arm);
     let x, z, tries = 0;
-    do { x = -half + 8 + rnd() * (SIZE - 16); z = -half + 8 + rnd() * (SIZE - 16); tries++; } while ((solids.some(s => x > s.x1 - 1 && x < s.x2 + 1 && z > s.z1 - 1 && z < s.z2 + 1) || Math.hypot(x - P.x, z - P.z) < 30) && tries < 200);
+    do { x = (rnd() - 0.5) * (MAP.size - 16); z = (rnd() - 0.5) * (MAP.size - 16); tries++; } while ((solids.some(s => x > s.x1 - 1 && x < s.x2 + 1 && z > s.z1 - 1 && z < s.z2 + 1) || Math.hypot(x - P.x, z - P.z) < 30) && tries < 200);
     g.position.set(x, 0, z); scene.add(g);
     const b = { g, body, head, x, z, hp: 100, alive: true, tx: x, tz: z, fire: 0, seen: 0, yaw: 0, hitT: 0, wander: 0 };
     bots.push(b); return b;
   }
-  function botAt(x, z) { return solids.some(s => x + 0.4 > s.x1 && x - 0.4 < s.x2 && z + 0.4 > s.z1 && z - 0.4 < s.z2); }
+  function botAt(x, z) { return solids.some(s => s.y0 < 1.7 && x + 0.4 > s.x1 && x - 0.4 < s.x2 && z + 0.4 > s.z1 && z - 0.4 < s.z2); }
   function botStep(b, dt) {
     if (!b.alive) return;
     const dx = P.x - b.x, dz = P.z - b.z, dist = Math.hypot(dx, dz);
-    const eye = new THREE.Vector3(b.x, 1.5, b.z), peye = new THREE.Vector3(P.x, 1.5, P.z);
+    const eye = new THREE.Vector3(b.x, 1.5, b.z), peye = new THREE.Vector3(P.x, P.y + 1.5, P.z);
     const sees = dist < 55 && !wallHit(eye, peye);
     if (sees && b.seen <= 0) b.fire = Math.max(b.fire, 0.7);              // время реакции
     b.seen = sees ? 2.0 : Math.max(0, b.seen - dt);
@@ -321,13 +406,13 @@
         // точность падает с дистанцией; попадание — по игроку
         const acc = Math.max(0.1, 0.5 - dist / 110);
         if (rnd() < acc) { P.hp -= 7 + Math.floor(rnd() * 5); $('dmg').classList.add('on'); setTimeout(() => $('dmg').classList.remove('on'), 120); if (navigator.vibrate) navigator.vibrate(30); }
-        tracer(new THREE.Vector3(b.x, 1.3, b.z), new THREE.Vector3(P.x + (rnd() - .5) * 0.6, 1.4 + (rnd() - .5) * 0.4, P.z + (rnd() - .5) * 0.6), 0xff8a5b);
+        tracer(new THREE.Vector3(b.x, 1.3, b.z), new THREE.Vector3(P.x + (rnd() - .5) * 0.6, P.y + 1.4 + (rnd() - .5) * 0.4, P.z + (rnd() - .5) * 0.6), 0xff8a5b);
         sfx.shot(0.35, 0.8);
       }
     } else {
       // патруль: новая точка раз в несколько секунд
       b.wander -= dt;
-      if (b.wander <= 0 || Math.hypot(b.tx - b.x, b.tz - b.z) < 1) { b.wander = 4 + rnd() * 5; b.tx = Math.max(-half + 4, Math.min(half - 4, b.x + (rnd() - .5) * 40)); b.tz = Math.max(-half + 4, Math.min(half - 4, b.z + (rnd() - .5) * 40)); }
+      if (b.wander <= 0 || Math.hypot(b.tx - b.x, b.tz - b.z) < 1) { b.wander = 4 + rnd() * 5; const hf = MAP.size / 2 - 4; b.tx = Math.max(-hf, Math.min(hf, b.x + (rnd() - .5) * 40)); b.tz = Math.max(-hf, Math.min(hf, b.z + (rnd() - .5) * 40)); }
       const ddx = b.tx - b.x, ddz = b.tz - b.z, dd = Math.hypot(ddx, ddz) || 1;
       const nx = b.x + ddx / dd * 2.2 * dt, nz = b.z + ddz / dd * 2.2 * dt;
       if (!botAt(nx, b.z)) b.x = nx; else b.tx = b.x; if (!botAt(b.x, nz)) b.z = nz; else b.tz = b.z;
@@ -368,6 +453,7 @@
       const o = ac.createOscillator(); o.type = 'square'; o.frequency.setValueAtTime(180 * pitch, t); o.frequency.exponentialRampToValueAtTime(40, t + 0.12); const g2 = ac.createGain(); g2.gain.setValueAtTime(vol * 0.5, t); g2.gain.exponentialRampToValueAtTime(0.001, t + 0.12); o.connect(g2).connect(ac.destination); o.start(t); o.stop(t + 0.13); },
     swing() { if (!this.on) return; const ac = this.ctx, t = ac.currentTime; const n = ac.sampleRate * 0.12, b = ac.createBuffer(1, n, ac.sampleRate), d = b.getChannelData(0); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.sin(Math.PI * i / n);
       const s = ac.createBufferSource(); s.buffer = b; const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.setValueAtTime(900, t); f.frequency.exponentialRampToValueAtTime(3500, t + 0.1); f.Q.value = 1.5; const g = ac.createGain(); g.gain.value = 0.35; s.connect(f).connect(g).connect(ac.destination); s.start(t); },
+    land() { if (!this.on) return; const ac = this.ctx, t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(120, t); o.frequency.exponentialRampToValueAtTime(50, t + 0.1); g.gain.setValueAtTime(0.25, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.12); o.connect(g).connect(ac.destination); o.start(t); o.stop(t + 0.13); },
     click() { if (!this.on) return; const ac = this.ctx, t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain(); o.type = 'square'; o.frequency.value = 1200; g.gain.setValueAtTime(0.15, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.05); o.connect(g).connect(ac.destination); o.start(t); o.stop(t + 0.06); },
     heal() { if (!this.on) return; const ac = this.ctx, t = ac.currentTime; [523, 659, 784].forEach((f, i) => { const o = ac.createOscillator(), g = ac.createGain(); o.type = 'triangle'; o.frequency.value = f; g.gain.setValueAtTime(0.0001, t + i * 0.07); g.gain.exponentialRampToValueAtTime(0.2, t + i * 0.07 + 0.02); g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.07 + 0.25); o.connect(g).connect(ac.destination); o.start(t + i * 0.07); o.stop(t + i * 0.07 + 0.3); }); },
     hit() { if (!this.on) return; const ac = this.ctx, t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(900, t); o.frequency.exponentialRampToValueAtTime(500, t + 0.08); g.gain.setValueAtTime(0.25, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.09); o.connect(g).connect(ac.destination); o.start(t); o.stop(t + 0.1); },
@@ -419,7 +505,7 @@
       if (b.hp <= 0) killBot(b);
     }
   }
-  function reload() { const w = WEAPONS[wi], a = ammo[wi]; if (w.melee || reloading > 0 || a.mag === w.mag || a.rest <= 0) return; reloading = w.reload; sfx.click(); }
+  function reload() { const w = WEAPONS[wi], a = ammo[wi]; if (w.melee) return nextKnife(); if (reloading > 0 || a.mag === w.mag || a.rest <= 0) return; reloading = w.reload; sfx.click(); }
   function finishReload() { const w = WEAPONS[wi], a = ammo[wi]; const need = w.mag - a.mag, take = Math.min(need, a.rest); a.mag += take; a.rest -= take; updateAmmo(); }
   function updateAmmo() { const k = WEAPONS[wi].melee; $('mag').textContent = k ? '—' : ammo[wi].mag; $('rest').textContent = k ? '' : '/ ' + ammo[wi].rest; $('wname').textContent = WEAPONS[wi].name + (reloading > 0 ? ' · перезарядка' : ''); }
   function swap() { wi = (wi + 1) % WEAPONS.length; reloading = 0; cooldown = 0.3; gunLayout(); updateAmmo(); sfx.click(); }
@@ -453,10 +539,11 @@
   $('reload').addEventListener('pointerdown', e => { e.preventDefault(); reload(); });
   $('fs').addEventListener('click', () => { const d = document.documentElement; if (document.fullscreenElement) document.exitFullscreen(); else if (d.requestFullscreen) d.requestFullscreen().catch(() => {}); });
   $('swap').addEventListener('pointerdown', e => { e.preventDefault(); swap(); });
+  $('jump').addEventListener('pointerdown', e => { e.preventDefault(); jump(); });
   // клавиатура для отладки на компьютере
   const keys = {};
-  addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'KeyR') reload(); if (e.code === 'KeyQ') swap(); if (e.code === 'Space') { firing = true; if (!WEAPONS[wi].auto) shoot(); } });
-  addEventListener('keyup', e => { keys[e.code] = false; if (e.code === 'Space') firing = false; });
+  addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'KeyR') reload(); if (e.code === 'KeyQ') swap(); if (e.code === 'Space') jump(); if (e.code === 'KeyF') { firing = true; if (!WEAPONS[wi].auto) shoot(); } });
+  addEventListener('keyup', e => { keys[e.code] = false; if (e.code === 'KeyF') firing = false; });
   canvas.addEventListener('click', () => { if (running && canvas.requestPointerLock && !('ontouchstart' in window)) canvas.requestPointerLock(); });
   addEventListener('mousemove', e => { if (document.pointerLockElement === canvas) { P.yaw -= e.movementX * 0.0025; P.pitch = Math.max(-1.2, Math.min(1.2, P.pitch - e.movementY * 0.0025)); } });
   addEventListener('mousedown', e => { if (document.pointerLockElement === canvas) { firing = true; if (!WEAPONS[wi].auto) shoot(); } });
@@ -472,15 +559,16 @@
     // вперёд по взгляду: yaw=0 смотрит в -Z
     const sp = P.speed * (WEAPONS[wi].speed || 1);
     const vx = (mx * c + mz * s) * sp * dt, vz = (mz * c - mx * s) * sp * dt;
-    movePlayer(vx, vz);
+    movePlayer(vx, vz, dt);
     // оружие
     cooldown = Math.max(0, cooldown - dt);
     if (reloading > 0) { reloading -= dt; if (reloading <= 0) { reloading = 0; finishReload(); } updateAmmo(); }
     if (firing && WEAPONS[wi].auto) shoot();
     gun.rotation.z = (WEAPONS[wi].melee ? -0.35 : 0) - recoil * (WEAPONS[wi].melee ? 0.5 : 0);
+    knifeFlip = Math.max(0, knifeFlip - dt * 3); knifeG.rotation.x = Math.sin(knifeFlip * Math.PI) * 6.28 * 0.5; knifeG.rotation.y = knifeFlip * Math.PI * 2;
     recoil = Math.max(0, recoil - dt * 8); kickPitch *= Math.exp(-6 * dt);
     // камера
-    camera.position.set(P.x, 1.6 + Math.sin(performance.now() / 180) * 0.015 * (l > 0.1 ? 1 : 0), P.z);
+    camera.position.set(P.x, P.y + 1.6 + Math.sin(performance.now() / 180) * 0.015 * (l > 0.1 && P.grounded ? 1 : 0), P.z);
     camera.rotation.set(0, 0, 0, 'YXZ'); camera.rotation.y = P.yaw; camera.rotation.x = P.pitch + kickPitch;
     const gp = GUN_POS[wi]; gun.position.set(gp[0], gp[1] + recoil * 0.02, gp[2] + recoil * 0.06);
     // боты
@@ -502,10 +590,17 @@
     $('overScore').textContent = kills; $('overSub').textContent = `противников выбито · рекорд ${best}`;
     $('over').hidden = false; if (document.exitPointerLock) document.exitPointerLock();
   }
+  let mapId = 'city'; try { mapId = localStorage.getItem('city.map') || 'city'; } catch (e) {} if (!MAPS[mapId]) mapId = 'city';
+  if (q.get('map') && MAPS[q.get('map')]) mapId = q.get('map');
+  const mapsEl = $('maps');
+  for (const id in MAPS) { const b = document.createElement('button'); b.type = 'button'; b.textContent = MAPS[id].name; b.dataset.map = id; b.addEventListener('click', () => { mapId = id; try { localStorage.setItem('city.map', id); } catch (e) {} mapsUI(); }); mapsEl.appendChild(b); }
+  function mapsUI() { for (const b of mapsEl.children) b.classList.toggle('on', b.dataset.map === mapId); }
+  mapsUI();
   function start() {
     for (const b of bots) scene.remove(b.g); bots.length = 0;
-    P.x = -half + STREET / 2 + 6; P.z = -half + STREET / 2 + 6; P.yaw = -Math.PI * 0.75; P.pitch = 0; P.hp = 100;
-    ammo.forEach((a, i) => { a.mag = WEAPONS[i].mag; a.rest = WEAPONS[i].rest; }); wi = 0; gunLayout(); reloading = 0; cooldown = 0;
+    if (!MAP || MAP.id !== mapId) buildMap(mapId);
+    P.x = MAP.spawn[0]; P.z = MAP.spawn[1]; P.yaw = MAP.spawn[2]; P.y = 0; P.vy = 0; P.grounded = true; P.pitch = 0; P.hp = 100;
+    ammo.forEach((a, i) => { a.mag = WEAPONS[i].mag; a.rest = WEAPONS[i].rest; }); wi = 0; ki = 0; knifeLayout(); gunLayout(); reloading = 0; cooldown = 0;
     kills = 0; timeLeft = 180; $('kills').textContent = '0';
     for (let i = 0; i < 6; i++) spawnBot(); $('alive').textContent = 6;
     for (const k of kits) { k.on = true; k.g.visible = true; k.t = 0; }
@@ -519,19 +614,24 @@
   if (q.get('sim')) {
     start(); running = true; let shots = 0, hp0 = 100, dmgT = -1;
     // игрок на площади, первый бот в 10 м перед ним в открытом месте
-    P.x = plazaC[0]; P.z = plazaC[1] + 22; P.yaw = 0; const b0 = bots[0]; b0.x = P.x; b0.z = P.z - 10; b0.tx = b0.x; b0.tz = b0.z;
+    P.x = MAP.center[0]; P.z = MAP.center[1] + 22; P.yaw = 0; const b0 = bots[0]; b0.x = P.x; b0.z = P.z - 10; b0.tx = b0.x; b0.tz = b0.z; let maxY = 0, endY = 0;
+    if (q.get('sim') === 'jump') { addBox(P.x, P.z - 2.2, 2, 2, 1.2, crateM); for (const b of bots) { b.x = 60; b.z = 60; } }
     if (q.get('sim') === 'knife') { wi = 2; gunLayout(); b0.z = P.z - 1.5; }
-    for (let i = 0; i < 60 * 30; i++) { step(1 / 60); if (P.hp < hp0 && dmgT < 0) dmgT = i / 60;
+    for (let i = 0; i < 60 * 30; i++) { if (q.get('sim') === 'jump') { if (i === 30) jump(); keys.KeyW = i > 30 && i < 52; maxY = Math.max(maxY, P.y); if (i === 120) endY = P.y; if (i > 120) break; }
+      step(1 / 60); if (P.hp < hp0 && dmgT < 0) dmgT = i / 60;
       scene.updateMatrixWorld(true);
-      if (i % 12 === 0) { const b = bots.find(x => x.alive); if (b) { P.yaw = Math.atan2(-(b.x - P.x), -(b.z - P.z)); P.pitch = 0; camera.rotation.set(P.pitch, P.yaw, 0, 'YXZ'); camera.position.set(P.x, 1.6, P.z); camera.updateMatrixWorld(); shoot(); shots++; } } if (!running) break; }
-    if (q.get('sim') === 'kit') { P.hp = 30; P.x = kitPts[1][0]; P.z = kitPts[1][1]; kitsStep(1 / 60, 0); }
-    document.title = `sim: kills ${kills} hp ${Math.round(P.hp)} firstDmg ${dmgT.toFixed(1)} shots ${shots} bots ${bots.filter(b => b.alive).length} solids ${solids.length}`;
+      if (i % 12 === 0 && q.get('sim') !== 'jump') { const b = bots.find(x => x.alive); if (b) { P.yaw = Math.atan2(-(b.x - P.x), -(b.z - P.z)); P.pitch = 0; camera.rotation.set(P.pitch, P.yaw, 0, 'YXZ'); camera.position.set(P.x, 1.6, P.z); camera.updateMatrixWorld(); shoot(); shots++; } } if (!running) break; }
+    if (q.get('sim') === 'kit') { P.hp = 30; P.x = MAP.kits[1][0]; P.z = MAP.kits[1][1]; kitsStep(1 / 60, 0); }
+    document.title = `sim(${MAP.id}): jumpMax ${maxY.toFixed(2)} endY ${endY.toFixed(2)} kills ${kills} hp ${Math.round(P.hp)} firstDmg ${dmgT.toFixed(1)} shots ${shots} bots ${bots.filter(b => b.alive).length} solids ${solids.length}`;
   }
   if (q.get('shot')) {
-    start(); P.x = plazaC[0] - 6; P.z = plazaC[1] + 26; P.yaw = 0.25; const b0 = bots[0]; b0.x = P.x - 3; b0.z = P.z - 12; b0.tx = b0.x; b0.tz = b0.z;
-    if (q.get('shot') === 'knife') { wi = 2; gunLayout(); updateAmmo(); } if (q.get('shot') === 'pistol') { wi = 1; gunLayout(); updateAmmo(); P.x = plazaC[0] + 2.5; P.z = plazaC[1] + 4; P.yaw = 0.6; }
+    start(); P.x = MAP.center[0] - 6; P.z = MAP.center[1] + 26; P.yaw = 0.25; const b0 = bots[0]; b0.x = P.x - 3; b0.z = P.z - 12; b0.tx = b0.x; b0.tz = b0.z;
+    if (q.get('shot') === 'knife') { wi = 2; gunLayout(); updateAmmo(); } if (q.get('shot') === 'pistol') { wi = 1; gunLayout(); updateAmmo(); P.x = MAP.center[0] + 2.5; P.z = MAP.center[1] + 4; P.yaw = 0.6; }
+    if (['k0', 'k1', 'k2'].includes(q.get('shot'))) { wi = 2; ki = +q.get('shot')[1]; knifeLayout(); gunLayout(); updateAmmo(); }
+    if (q.get('shot') === 'map') { P.x = MAP.spawn[0]; P.z = MAP.spawn[1]; P.yaw = MAP.spawn[2]; P.y = 12; }
     step(1 / 60); scene.updateMatrixWorld(true); renderer.render(scene, camera);
   }
+  if (!MAP) buildMap(mapId);
   requestAnimationFrame(loop);
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 })();
