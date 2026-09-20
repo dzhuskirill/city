@@ -41,10 +41,12 @@
   .btn:active, .btn.on { background: rgba(255,176,0,.35); border-color: var(--accent); }
   #fire { right: 24px; bottom: calc(24px + env(safe-area-inset-bottom)); width: 82px; height: 82px; font-size: 14px; }
   #reload { right: 122px; bottom: calc(34px + env(safe-area-inset-bottom)); width: 58px; height: 58px; }
+  #fs { left: 18px; top: calc(14px + env(safe-area-inset-top)); width: 40px; height: 40px; font-size: 16px; }
   #swap { right: 30px; bottom: calc(190px + env(safe-area-inset-bottom)); width: 58px; height: 58px; }
   #stick { position: fixed; left: 0; bottom: 0; width: 50vw; height: 60vh; pointer-events: none; }
   #stick .base { position: absolute; width: 110px; height: 110px; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); background: rgba(255,255,255,.06); display: none; transform: translate(-50%,-50%); }
   #stick .knob { position: absolute; width: 48px; height: 48px; border-radius: 50%; background: rgba(255,255,255,.55); display: none; transform: translate(-50%,-50%); }
+  #diag { position: fixed; left: 12px; right: 12px; top: calc(52px + env(safe-area-inset-top)); z-index: 6; background: rgba(20,10,10,.88); color: #ffd9d4; border: 1px solid rgba(255,80,60,.5); border-radius: 8px; padding: 10px 12px; font-size: 12px; white-space: pre-wrap; pointer-events: auto; }
   .overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 24px;
     background: rgba(14,17,22,.82); z-index: 5; }
   .overlay[hidden] { display: none; }
@@ -64,14 +66,17 @@
   <div class="hp"><div class="bar"><i id="hpbar"></i></div><div class="n">здоровье <span id="hpn">100</span></div></div>
   <div class="ammo"><div class="w" id="wname">автомат</div><b id="mag">30</b> <span id="rest">/ 90</span></div>
 </div>
+<div id="diag" hidden></div>
 <div id="stick"><div class="base" id="sbase"></div><div class="knob" id="sknob"></div></div>
 <div class="btn" id="fire">огонь</div>
 <div class="btn" id="reload">R</div>
 <div class="btn" id="swap">⇄</div>
+<div class="btn" id="fs">⛶</div>
 <div class="overlay" id="start">
   <h1>Квартал</h1>
   <div class="sub">Одиночный бой в городском квартале. Левая половина экрана — ходьба (виртуальный стик), правая — прицел (тяните), кнопка «Огонь». Оружие: автомат, пистолет и нож (⇄) — с ножом бегаешь быстрее, удар в спину валит сразу. Аптечки (белые ящики с крестом) стоят на площади и на краях города: +50 HP. Продержитесь 3 минуты и выбейте как можно больше противников.</div>
   <button type="button" id="go">В бой</button>
+  <div class="sub" style="font-size:12px">Чёрный экран? <a href="?safe=1" style="color:var(--accent)">Облегчённый режим</a> · <a href="?debug=1" style="color:var(--muted)">диагностика</a></div>
 </div>
 <div class="overlay" id="over" hidden>
   <div class="sub" id="overTitle">Бой окончен</div>
@@ -85,21 +90,32 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const canvas = $('c');
-  const DPR = Math.min(window.devicePixelRatio || 1, 1.75);
+  const q = new URLSearchParams(location.search);
+  const SAFE = q.get('safe') === '1';
+  const DPR = Math.min(window.devicePixelRatio || 1, SAFE ? 1 : 1.25);
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
   renderer.setPixelRatio(DPR); renderer.outputEncoding = THREE.sRGBEncoding;
-  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
+  renderer.shadowMap.enabled = !SAFE; renderer.shadowMap.type = THREE.PCFShadowMap;
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xb9c6d3); scene.fog = new THREE.Fog(0xb9c6d3, 60, 170);
   const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 300);
   let W = 0, H = 0;
   function resize() { W = innerWidth; H = innerHeight; renderer.setSize(W, H, false); camera.aspect = W / H; camera.updateProjectionMatrix(); }
   addEventListener('resize', resize); resize();
+  // диагностика: потеря WebGL-контекста и ошибки → баннер, ?debug=1 — лог на экране
+  const diag = $('diag');
+  function showDiag(msg) { diag.hidden = false; diag.textContent = msg; }
+  canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); showDiag('Браузер сбросил 3D-графику (нехватка памяти GPU). Нажмите, чтобы перезапустить в облегчённом режиме.'); diag.onclick = () => { location.search = '?safe=1'; }; });
+  canvas.addEventListener('webglcontextrestored', () => { diag.hidden = true; });
+  const errLog = []; const origErr = console.error.bind(console);
+  console.error = (...a) => { errLog.push(a.map(String).join(' ').slice(0, 300)); origErr(...a); if (q.get('debug')) showDiag(errLog.slice(-4).join('\n')); };
+  addEventListener('error', e => { errLog.push(String(e.message)); if (q.get('debug')) showDiag(errLog.slice(-4).join('\n')); });
+  if (q.get('debug')) { const gl = renderer.getContext(); const dbg = gl.getExtension('WEBGL_debug_renderer_info'); showDiag(`WebGL${renderer.capabilities.isWebGL2 ? 2 : 1} · ${dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : '?'} · dpr ${DPR} · ${W}×${H}` + (SAFE ? ' · safe' : '')); }
 
   // ── свет ──────────────────────────────────────────────────────────────
   scene.add(new THREE.HemisphereLight(0xdfe8f5, 0x55606a, 0.85));
   const sun = new THREE.DirectionalLight(0xfff1dc, 1.0); sun.position.set(60, 90, 40); sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048); const sc = sun.shadow.camera; sc.left = -120; sc.right = 120; sc.top = 120; sc.bottom = -120; sc.near = 10; sc.far = 300;
+  sun.shadow.mapSize.set(1024, 1024); const sc = sun.shadow.camera; sc.left = -120; sc.right = 120; sc.top = 120; sc.bottom = -120; sc.near = 10; sc.far = 300;
   scene.add(sun); scene.add(sun.target);
 
   // ── детерминированный генератор ───────────────────────────────────────
@@ -245,14 +261,14 @@
 
   // ── аптечки: белый ящик с красным крестом, +50 HP, возвращается через 60 с ─
   const kits = [];
-  const kitW = new THREE.MeshLambertMaterial({ color: 0xf4f6f8 }), kitR = new THREE.MeshLambertMaterial({ color: 0xe0242b });
+  const kitW = new THREE.MeshLambertMaterial({ color: 0xf4f6f8 }), kitR = new THREE.MeshBasicMaterial({ color: 0xff2a30 });
   function medkit(x, z) {
     const g = new THREE.Group();
     const box = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, 0.45), kitW); box.castShadow = true; g.add(box);
     for (const [sx, sy, sz, w, h, d] of [[0, 0, 0.23, 0.3, 0.1, 0.02], [0, 0, 0.23, 0.1, 0.3, 0.02], [0, 0, -0.23, 0.3, 0.1, 0.02], [0, 0, -0.23, 0.1, 0.3, 0.02], [0.31, 0, 0, 0.02, 0.3, 0.1], [0.31, 0, 0, 0.02, 0.1, 0.3], [-0.31, 0, 0, 0.02, 0.3, 0.1], [-0.31, 0, 0, 0.02, 0.1, 0.3]]) {
       const c = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), kitR); c.position.set(sx, sy, sz); g.add(c);
     }
-    const glow = new THREE.PointLight(0xff5a5a, 0.6, 6); glow.position.y = 0.8; g.add(glow);
+    const halo = new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 8), new THREE.MeshBasicMaterial({ color: 0xff3b3b, transparent: true, opacity: 0.18, depthWrite: false })); g.add(halo);
     g.position.set(x, 0.5, z); scene.add(g);
     kits.push({ g, x, z, t: 0, on: true });
   }
@@ -435,6 +451,7 @@
   const stopFire = () => { firing = false; fireBtn.classList.remove('on'); };
   fireBtn.addEventListener('pointerup', stopFire); fireBtn.addEventListener('pointercancel', stopFire); fireBtn.addEventListener('pointerleave', stopFire);
   $('reload').addEventListener('pointerdown', e => { e.preventDefault(); reload(); });
+  $('fs').addEventListener('click', () => { const d = document.documentElement; if (document.fullscreenElement) document.exitFullscreen(); else if (d.requestFullscreen) d.requestFullscreen().catch(() => {}); });
   $('swap').addEventListener('pointerdown', e => { e.preventDefault(); swap(); });
   // клавиатура для отладки на компьютере
   const keys = {};
@@ -493,14 +510,12 @@
     for (let i = 0; i < 6; i++) spawnBot(); $('alive').textContent = 6;
     for (const k of kits) { k.on = true; k.g.visible = true; k.t = 0; }
     updateAmmo(); $('start').hidden = true; $('over').hidden = true; running = true; sfx.init();
-    if (document.documentElement.requestFullscreen && !document.fullscreenElement && 'ontouchstart' in window) document.documentElement.requestFullscreen().catch(() => {});
   }
   $('go').addEventListener('click', start); $('again').addEventListener('click', start);
   $('menu').addEventListener('click', () => { $('over').hidden = true; $('start').hidden = false; });
   let last = 0;
   function loop(ts) { const dt = Math.min(0.05, (ts - last) / 1000 || 0.016); last = ts; if (running) step(dt); renderer.render(scene, camera); requestAnimationFrame(loop); }
   // ?sim=1 — прогон логики без экрана: игрок стоит, боты ищут его; результат в title
-  const q = new URLSearchParams(location.search);
   if (q.get('sim')) {
     start(); running = true; let shots = 0, hp0 = 100, dmgT = -1;
     // игрок на площади, первый бот в 10 м перед ним в открытом месте
