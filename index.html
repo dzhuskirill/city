@@ -17,6 +17,7 @@
   .hp { position: absolute; left: 16px; bottom: calc(18px + env(safe-area-inset-bottom)); width: 150px; }
   .hp .bar { height: 8px; background: rgba(255,255,255,.15); border-radius: 4px; overflow: hidden; }
   .hp .bar i { display: block; height: 100%; width: 100%; background: var(--ok); transition: width .15s; }
+  .hp .bar i.heal { box-shadow: 0 0 12px 3px var(--ok); }
   .hp .n { font-size: 13px; color: var(--muted); margin-top: 4px; letter-spacing: .06em; text-transform: uppercase; }
   .ammo { position: absolute; right: 18px; bottom: calc(110px + env(safe-area-inset-bottom)); text-align: right; font-variant-numeric: tabular-nums; }
   .ammo b { font-size: 34px; font-weight: 800; line-height: 1; }
@@ -69,7 +70,7 @@
 <div class="btn" id="swap">⇄</div>
 <div class="overlay" id="start">
   <h1>Квартал</h1>
-  <div class="sub">Одиночный бой в городском квартале. Левая половина экрана — ходьба (виртуальный стик), правая — прицел (тяните), кнопка «Огонь». Оружие: автомат, пистолет и нож (⇄) — с ножом бегаешь быстрее, удар в спину валит сразу. Продержитесь 3 минуты и выбейте как можно больше противников.</div>
+  <div class="sub">Одиночный бой в городском квартале. Левая половина экрана — ходьба (виртуальный стик), правая — прицел (тяните), кнопка «Огонь». Оружие: автомат, пистолет и нож (⇄) — с ножом бегаешь быстрее, удар в спину валит сразу. Аптечки (белые ящики с крестом) стоят на площади и на краях города: +50 HP. Продержитесь 3 минуты и выбейте как можно больше противников.</div>
   <button type="button" id="go">В бой</button>
 </div>
 <div class="overlay" id="over" hidden>
@@ -219,15 +220,56 @@
   // ── оружие в кадре (простая модель) ──────────────────────────────────
   const gun = new THREE.Group();
   const gunM = new THREE.MeshLambertMaterial({ color: 0x23272e }), gunM2 = new THREE.MeshLambertMaterial({ color: 0x3b4048 });
-  const gunBody = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.08, 0.46), gunM); gun.add(gunBody);
-  const gunBarrel = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.025, 0.32), gunM2); gunBarrel.position.set(0, 0.025, -0.38); gun.add(gunBarrel);
-  const gunMag = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.16, 0.08), gunM2); gunMag.position.set(0, -0.12, 0.02); gun.add(gunMag);
-  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.05, 0.3), new THREE.MeshLambertMaterial({ color: 0xdfe6ee })); blade.position.set(0, 0.01, -0.3); blade.visible = false; gun.add(blade);
-  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.045, 0.14), new THREE.MeshLambertMaterial({ color: 0x2b1f14 })); grip.position.set(0, 0, -0.08); grip.visible = false; gun.add(grip);
+  // автомат
+  const rifleG = new THREE.Group(); gun.add(rifleG);
+  const gunBody = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.08, 0.46), gunM); rifleG.add(gunBody);
+  const gunBarrel = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.025, 0.32), gunM2); gunBarrel.position.set(0, 0.025, -0.38); rifleG.add(gunBarrel);
+  const gunMag = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.16, 0.08), gunM2); gunMag.position.set(0, -0.12, 0.02); rifleG.add(gunMag);
+  // пистолет: затвор, рамка, рукоять под углом, скоба
+  const pistolG = new THREE.Group(); gun.add(pistolG);
+  const pSlide = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.045, 0.22), gunM2); pSlide.position.set(0, 0.03, -0.08); pistolG.add(pSlide);
+  const pFrame = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.03, 0.2), gunM); pFrame.position.set(0, -0.005, -0.06); pistolG.add(pFrame);
+  const pGrip = new THREE.Mesh(new THREE.BoxGeometry(0.036, 0.11, 0.05), gunM); pGrip.position.set(0, -0.07, 0.02); pGrip.rotation.x = -0.28; pistolG.add(pGrip);
+  const pGuard = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.05, 0.02), gunM2); pGuard.position.set(0, -0.04, -0.06); pistolG.add(pGuard);
+  const pMuzzle = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.03, 8), gunM); pMuzzle.rotation.x = Math.PI / 2; pMuzzle.position.set(0, 0.03, -0.2); pistolG.add(pMuzzle);
+  // нож
+  const knifeG = new THREE.Group(); gun.add(knifeG);
+  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.05, 0.3), new THREE.MeshLambertMaterial({ color: 0xdfe6ee })); blade.position.set(0, 0.01, -0.3); knifeG.add(blade);
+  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.045, 0.14), new THREE.MeshLambertMaterial({ color: 0x2b1f14 })); grip.position.set(0, 0, -0.08); knifeG.add(grip);
   const flash = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), new THREE.MeshBasicMaterial({ color: 0xffd27a })); flash.position.set(0, 0.03, -0.6); flash.visible = false; gun.add(flash);
   camera.add(gun); scene.add(camera);
-  function gunLayout() { const w = WEAPONS[wi]; const k = !!w.melee; blade.visible = grip.visible = k; gunBody.visible = gunMag.visible = !k; gunBarrel.visible = !k && w.auto; gunBody.scale.z = w.auto ? 1 : 0.55; gun.position.set(0.26, -0.22, -0.5); gun.rotation.set(0, 0, k ? -0.35 : 0); $('fire').textContent = k ? 'удар' : 'огонь'; }
+  const GUN_POS = [[0.26, -0.22, -0.5], [0.2, -0.16, -0.32], [0.26, -0.22, -0.5]];
+  function gunLayout() { const w = WEAPONS[wi]; const k = !!w.melee; rifleG.visible = wi === 0; pistolG.visible = wi === 1; knifeG.visible = k;
+    flash.position.set(0, 0.03, wi === 1 ? -0.24 : -0.6); gun.position.set(...GUN_POS[wi]); gun.rotation.set(0, 0, k ? -0.35 : 0); $('fire').textContent = k ? 'удар' : 'огонь'; }
   gunLayout();
+
+  // ── аптечки: белый ящик с красным крестом, +50 HP, возвращается через 60 с ─
+  const kits = [];
+  const kitW = new THREE.MeshLambertMaterial({ color: 0xf4f6f8 }), kitR = new THREE.MeshLambertMaterial({ color: 0xe0242b });
+  function medkit(x, z) {
+    const g = new THREE.Group();
+    const box = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, 0.45), kitW); box.castShadow = true; g.add(box);
+    for (const [sx, sy, sz, w, h, d] of [[0, 0, 0.23, 0.3, 0.1, 0.02], [0, 0, 0.23, 0.1, 0.3, 0.02], [0, 0, -0.23, 0.3, 0.1, 0.02], [0, 0, -0.23, 0.1, 0.3, 0.02], [0.31, 0, 0, 0.02, 0.3, 0.1], [0.31, 0, 0, 0.02, 0.1, 0.3], [-0.31, 0, 0, 0.02, 0.3, 0.1], [-0.31, 0, 0, 0.02, 0.1, 0.3]]) {
+      const c = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), kitR); c.position.set(sx, sy, sz); g.add(c);
+    }
+    const glow = new THREE.PointLight(0xff5a5a, 0.6, 6); glow.position.y = 0.8; g.add(glow);
+    g.position.set(x, 0.5, z); scene.add(g);
+    kits.push({ g, x, z, t: 0, on: true });
+  }
+  // точки: площадь и по одной на перекрёстках/тротуарах в разных частях города
+  const kitPts = [[plazaC[0], plazaC[1]], [-half + STREET / 2 + 2, 0], [half - STREET / 2 - 2, 0], [0, -half + STREET / 2 + 2], [0, half - STREET / 2 - 2]];
+  for (const [x, z] of kitPts) medkit(x, z);
+  function kitsStep(dt, tm) {
+    for (const k of kits) {
+      if (!k.on) { k.t -= dt; if (k.t <= 0) { k.on = true; k.g.visible = true; } continue; }
+      k.g.rotation.y = tm * 1.2; k.g.position.y = 0.5 + Math.sin(tm * 2.5) * 0.08;
+      if (Math.hypot(P.x - k.x, P.z - k.z) < 1.3 && P.hp < 100) {
+        P.hp = Math.min(100, P.hp + 50); k.on = false; k.g.visible = false; k.t = 60; sfx.heal();
+        $('hpbar').classList.add('heal'); setTimeout(() => $('hpbar').classList.remove('heal'), 500);
+        if (navigator.vibrate) navigator.vibrate([20, 40, 20]);
+      }
+    }
+  }
 
   // ── боты ──────────────────────────────────────────────────────────────
   const bots = [];
@@ -311,6 +353,7 @@
     swing() { if (!this.on) return; const ac = this.ctx, t = ac.currentTime; const n = ac.sampleRate * 0.12, b = ac.createBuffer(1, n, ac.sampleRate), d = b.getChannelData(0); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.sin(Math.PI * i / n);
       const s = ac.createBufferSource(); s.buffer = b; const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.setValueAtTime(900, t); f.frequency.exponentialRampToValueAtTime(3500, t + 0.1); f.Q.value = 1.5; const g = ac.createGain(); g.gain.value = 0.35; s.connect(f).connect(g).connect(ac.destination); s.start(t); },
     click() { if (!this.on) return; const ac = this.ctx, t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain(); o.type = 'square'; o.frequency.value = 1200; g.gain.setValueAtTime(0.15, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.05); o.connect(g).connect(ac.destination); o.start(t); o.stop(t + 0.06); },
+    heal() { if (!this.on) return; const ac = this.ctx, t = ac.currentTime; [523, 659, 784].forEach((f, i) => { const o = ac.createOscillator(), g = ac.createGain(); o.type = 'triangle'; o.frequency.value = f; g.gain.setValueAtTime(0.0001, t + i * 0.07); g.gain.exponentialRampToValueAtTime(0.2, t + i * 0.07 + 0.02); g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.07 + 0.25); o.connect(g).connect(ac.destination); o.start(t + i * 0.07); o.stop(t + i * 0.07 + 0.3); }); },
     hit() { if (!this.on) return; const ac = this.ctx, t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(900, t); o.frequency.exponentialRampToValueAtTime(500, t + 0.08); g.gain.setValueAtTime(0.25, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.09); o.connect(g).connect(ac.destination); o.start(t); o.stop(t + 0.1); },
   };
 
@@ -422,9 +465,10 @@
     // камера
     camera.position.set(P.x, 1.6 + Math.sin(performance.now() / 180) * 0.015 * (l > 0.1 ? 1 : 0), P.z);
     camera.rotation.set(0, 0, 0, 'YXZ'); camera.rotation.y = P.yaw; camera.rotation.x = P.pitch + kickPitch;
-    gun.position.set(0.26, -0.22 + recoil * 0.02, -0.5 + recoil * 0.06);
+    const gp = GUN_POS[wi]; gun.position.set(gp[0], gp[1] + recoil * 0.02, gp[2] + recoil * 0.06);
     // боты
     for (const b of bots) botStep(b, dt);
+    kitsStep(dt, performance.now() / 1000);
     // эффекты
     for (let i = tracers.length - 1; i >= 0; i--) { const t = tracers[i]; t.t += dt; t.line.material.opacity = Math.max(0, 0.9 - t.t * 9); if (t.t > 0.1) { scene.remove(t.line); tracers.splice(i, 1); } }
     for (let i = sparks.length - 1; i >= 0; i--) { const s2 = sparks[i]; s2.t += dt; s2.m.scale.setScalar(1 + s2.t * 6); s2.m.material.opacity = 1 - s2.t * 4; if (s2.t > 0.25) { scene.remove(s2.m); sparks.splice(i, 1); } }
@@ -447,6 +491,7 @@
     ammo.forEach((a, i) => { a.mag = WEAPONS[i].mag; a.rest = WEAPONS[i].rest; }); wi = 0; gunLayout(); reloading = 0; cooldown = 0;
     kills = 0; timeLeft = 180; $('kills').textContent = '0';
     for (let i = 0; i < 6; i++) spawnBot(); $('alive').textContent = 6;
+    for (const k of kits) { k.on = true; k.g.visible = true; k.t = 0; }
     updateAmmo(); $('start').hidden = true; $('over').hidden = true; running = true; sfx.init();
     if (document.documentElement.requestFullscreen && !document.fullscreenElement && 'ontouchstart' in window) document.documentElement.requestFullscreen().catch(() => {});
   }
@@ -464,11 +509,12 @@
     for (let i = 0; i < 60 * 30; i++) { step(1 / 60); if (P.hp < hp0 && dmgT < 0) dmgT = i / 60;
       scene.updateMatrixWorld(true);
       if (i % 12 === 0) { const b = bots.find(x => x.alive); if (b) { P.yaw = Math.atan2(-(b.x - P.x), -(b.z - P.z)); P.pitch = 0; camera.rotation.set(P.pitch, P.yaw, 0, 'YXZ'); camera.position.set(P.x, 1.6, P.z); camera.updateMatrixWorld(); shoot(); shots++; } } if (!running) break; }
+    if (q.get('sim') === 'kit') { P.hp = 30; P.x = kitPts[1][0]; P.z = kitPts[1][1]; kitsStep(1 / 60, 0); }
     document.title = `sim: kills ${kills} hp ${Math.round(P.hp)} firstDmg ${dmgT.toFixed(1)} shots ${shots} bots ${bots.filter(b => b.alive).length} solids ${solids.length}`;
   }
   if (q.get('shot')) {
     start(); P.x = plazaC[0] - 6; P.z = plazaC[1] + 26; P.yaw = 0.25; const b0 = bots[0]; b0.x = P.x - 3; b0.z = P.z - 12; b0.tx = b0.x; b0.tz = b0.z;
-    if (q.get('shot') === 'knife') { wi = 2; gunLayout(); updateAmmo(); }
+    if (q.get('shot') === 'knife') { wi = 2; gunLayout(); updateAmmo(); } if (q.get('shot') === 'pistol') { wi = 1; gunLayout(); updateAmmo(); P.x = plazaC[0] + 2.5; P.z = plazaC[1] + 4; P.yaw = 0.6; }
     step(1 / 60); scene.updateMatrixWorld(true); renderer.render(scene, camera);
   }
   requestAnimationFrame(loop);
