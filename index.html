@@ -27,6 +27,8 @@
   .top div { text-align: center; }
   .top b { display: block; font-size: 24px; font-weight: 800; line-height: 1; }
   .top b.red { color: var(--danger); }
+  .top div[hidden] { display: none; }
+  #allies { color: var(--ok); }
   .top span { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
   .cross { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; transform: translate(-50%, -50%); }
   .cross::before, .cross::after { content: ''; position: absolute; background: rgba(255,255,255,.9); box-shadow: 0 0 0 1px rgba(0,0,0,.6); }
@@ -75,7 +77,7 @@
 <body>
 <canvas id="c"></canvas>
 <div class="hud">
-  <div class="top"><div><b id="kills">0</b><span>убито</span></div><div><b id="time">3:00</b><span>время</span></div><div><b id="alive">6</b><span>врагов</span></div></div>
+  <div class="top"><div><b id="kills">0</b><span>убито</span></div><div><b id="time">3:00</b><span>время</span></div><div><b id="alive">6</b><span>врагов</span></div><div id="alliesBox" hidden><b id="allies">4</b><span>союзников</span></div></div>
   <div class="msg" id="msg"></div>
   <div class="cross"><i></i></div><div class="hit" id="hitmark"></div><div class="dmg" id="dmg"></div>
   <div class="hp"><div class="bar"><i id="hpbar"></i></div><div class="n">здоровье <span id="hpn">100</span></div></div>
@@ -92,7 +94,7 @@
 <div class="overlay" id="start">
   <h1>Квартал</h1>
   <div class="sub">Одиночный бой в городском квартале. Левая половина экрана — ходьба (виртуальный стик), правая — прицел (тяните), кнопка «Огонь». Оружие: автомат, пистолет и нож (⇄) — с ножом бегаешь быстрее, удар в спину валит сразу. Кнопка ↑ — прыжок: можно запрыгнуть на ящики, машины и контейнеры. С ножом кнопка R меняет нож: тактический, керамбит, бабочка. Аптечки (белые ящики с крестом): +50 HP. Продержитесь 3 минуты и выбейте как можно больше противников.</div>
-  <div class="sub" id="modeInfo" hidden><b>Likestone — режим «Закладка»</b>, вы против пяти ботов. За Т: встаньте на точку A или B и держите 💣 3 с; бомба взрывается через 40 с. За КТ: не дайте Т заложить бомбу, а если заложили — держите кнопку у бомбы 5 с. На балкон и второй этаж башни ведут лестницы.</div>
+  <div class="sub" id="modeInfo" hidden><b>Likestone — режим «Закладка»</b>, 5 на 5: вы и 4 бота-союзника (зелёная метка) против 5 ботов. За Т: встаньте на точку A или B и держите 💣 3 с; бомба взрывается через 40 с. За КТ: не дайте Т заложить бомбу, а если заложили — держите кнопку у бомбы 5 с. На балкон и второй этаж башни ведут лестницы.</div>
   <div class="maps" id="maps"></div>
   <div class="maps" id="sides" hidden></div>
   <button type="button" id="go">В бой</button>
@@ -358,6 +360,11 @@
         spawnT: [[880, 480], [930, 480], [870, 540], [905, 560], [950, 540]].map(p => at(...p)),
         spawnCT: [[220, 160], [300, 160], [250, 220], [340, 200], [200, 230]].map(p => at(...p)),
         ctHold: [siteM.A.guard[0], siteM.A.guard[1], siteM.B.guard[0], siteM.B.guard[1], pt([700, 230], [850, 285])],
+        // тактика Т: точки сбора перед заходом, маршруты захода, обход, засада на ротацию КТ
+        tac: { stage: { A: at(850, 300), B: at(760, 400) }, go: { A: [at(950, 258)], B: [at(700, 412), at(640, 412)] },
+          mid: at(720, 230), midGo: { A: [at(890, 150), at(950, 258)], B: [at(760, 400), at(700, 412), at(640, 412)] },
+          flank: [at(700, 200), at(450, 165), at(290, 370), at(470, 545)], flankGo: [at(640, 480)],
+          lurk: { A: pt([500, 160], [385, 200]), B: pt([720, 230], [450, 165]) } },
         kits: [at(760, 215), at(300, 350)] };
     } },
   };
@@ -559,13 +566,14 @@
   function botAt(x, z) { return solids.some(s => s.y0 < 1.7 && x + 0.4 > s.x1 && x - 0.4 < s.x2 && z + 0.4 > s.z1 && z - 0.4 < s.z2); }
   function botStep(b, dt) {
     if (!b.alive) return;
+    if (MAP.mode === 'bomb') return bombBot(b, dt);
     const dx = P.x - b.x, dz = P.z - b.z, dist = Math.hypot(dx, dz);
     const eye = new THREE.Vector3(b.x, 1.5, b.z), peye = new THREE.Vector3(P.x, P.y + 1.5, P.z);
-    const sees = !P.dead && dist < 55 && !wallHit(eye, peye);
+    const sees = dist < 55 && !wallHit(eye, peye);
     if (sees && b.seen <= 0) b.fire = Math.max(b.fire, 0.7);              // время реакции
     b.seen = sees ? 2.0 : Math.max(0, b.seen - dt);
     if (b.seen > 0) {
-      b.yaw = Math.atan2(dx, dz); b.defuse = 0; b.plantT = 0;
+      b.yaw = Math.atan2(dx, dz);
       // держит дистанцию 8–20 м, иначе подходит/отходит
       const want = dist > 20 ? 1 : dist < 8 ? -1 : 0;
       const sp = 3.2 * want * dt, nx = b.x + dx / dist * sp, nz = b.z + dz / dist * sp;
@@ -579,8 +587,7 @@
         tracer(new THREE.Vector3(b.x, 1.3, b.z), new THREE.Vector3(P.x + (rnd() - .5) * 0.6, P.y + 1.4 + (rnd() - .5) * 0.4, P.z + (rnd() - .5) * 0.6), 0xff8a5b);
         sfx.shot(0.35, 0.8);
       }
-    } else if (MAP.mode === 'bomb') botTask(b, dt);
-    else {
+    } else {
       // патруль: новая точка раз в несколько секунд
       b.wander -= dt;
       if (b.wander <= 0 || Math.hypot(b.tx - b.x, b.tz - b.z) < 1) { b.wander = 4 + rnd() * 5; const hf = MAP.size / 2 - 4; b.tx = Math.max(-hf, Math.min(hf, b.x + (rnd() - .5) * 40)); b.tz = Math.max(-hf, Math.min(hf, b.z + (rnd() - .5) * 40)); }
@@ -592,34 +599,120 @@
     b.g.position.set(b.x, 0, b.z); b.g.rotation.y = b.yaw;
     if (b.hitT > 0) { b.hitT -= dt; b.body.material = botMatHit; } else b.body.material = b.mat;
   }
-  // режим «Закладка»: КТ держат точки и разминируют, Т несут бомбу на точку и охраняют её
-  function botTask(b, dt) {
-    if (b.side === 'CT') {
-      if (R.phase === 'planted') {
-        if (navStep(b, R.bomb.x, R.bomb.z, P.speed, dt) < 1.3) { b.defuse += dt; R.defusing = b; if (b.defuse >= DEFUSE) roundEnd('CT', 'Бомба обезврежена'); } else b.defuse = 0;
-      } else if (navStep(b, b.hx, b.hz, P.speed, dt) < 0.8) b.yaw = b.look;
-    } else if (R.phase === 'live' && R.carrier === b) {
-      if (navStep(b, R.plant[0], R.plant[1], P.speed, dt) < 0.9) { b.plantT += dt; if (b.plantT >= PLANT) plantBomb(b.x, b.z); } else b.plantT = 0;
-    } else if (R.phase === 'live' && R.dropped && R.fetcher === b) {
-      if (navStep(b, R.dropped.x, R.dropped.z, P.speed, dt) < 1) { R.carrier = b; R.dropped = null; R.fetcher = null; bombG.visible = false; }
-    } else if (navStep(b, b.hx, b.hz, P.speed, dt) < 0.8) b.yaw = b.look;
+  // ── режим «Закладка», 5 на 5: боты воюют друг с другом ───────────────
+  const isEnemy = b => MAP.mode !== 'bomb' || b.side !== R.side;
+  const tgAlive = t => t === P ? !P.dead : t.alive;
+  const tgPos = t => t === P ? [P.x, P.y + 1.5, P.z] : [t.x, 1.5, t.z];
+  const vA = new THREE.Vector3(), vB = new THREE.Vector3();
+  function findTarget(b) {                                                // ближайший видимый противник
+    let best = null, bd = 55; vA.set(b.x, 1.5, b.z);
+    const cand = bots.filter(o => o.alive && o.side !== b.side); if (!P.dead && b.side !== R.side) cand.push(P);
+    for (const t of cand) { const [x, y, z] = tgPos(t), d = Math.hypot(x - b.x, z - b.z); if (d < bd && !wallHit(vA, vB.set(x, y, z))) { best = t; bd = d; } }
+    return best;
   }
-  const botMatHit = new THREE.MeshBasicMaterial({ color: 0xffd0c8 });
-  function killBot(b) {
-    b.alive = false; kills++; $('kills').textContent = kills;
-    b.g.rotation.x = Math.PI / 2; b.g.position.y = 0.4;                // «падает»
-    setTimeout(() => { scene.remove(b.g); }, 4000);
-    $('alive').textContent = bots.filter(x => x.alive).length;
-    if (MAP.mode === 'bomb') {
-      if (R.carrier === b) { R.carrier = null; R.dropped = { x: b.x, z: b.z }; bombG.position.set(b.x, 0.2, b.z); bombG.visible = true; bombLed.visible = false; setMsg('Т потеряли бомбу', 3); }
-      if (R.dropped && (!R.fetcher || !R.fetcher.alive)) { let best = 1e9; R.fetcher = null; for (const o of bots) if (o.alive) { const d = Math.hypot(o.x - R.dropped.x, o.z - R.dropped.z); if (d < best) { best = d; R.fetcher = o; } } }
-      if (!bots.some(x => x.alive)) {
-        if (R.side === 'T') roundEnd('T', 'Все КТ уничтожены');
-        else if (R.phase === 'live') roundEnd('CT', 'Все Т уничтожены');
-        else setMsg('Все Т уничтожены — разминируйте бомбу!', 4);
+  function hurtPlayer(n) { P.hp -= n; $('dmg').classList.add('on'); setTimeout(() => $('dmg').classList.remove('on'), 120); if (navigator.vibrate) navigator.vibrate(30); }
+  function bombBot(b, dt) {
+    b.scan -= dt;
+    if (b.scan <= 0) { b.scan = 0.2 + Math.random() * 0.1; const t = findTarget(b); if (t && !b.target) b.fire = Math.max(b.fire, 0.6); b.target = t; }   // 0,6 с — реакция
+    if (b.target && !tgAlive(b.target)) b.target = null;
+    const tg = b.target;
+    if (tg) {
+      const [x, y, z] = tgPos(tg), dx = x - b.x, dz = z - b.z, dist = Math.hypot(dx, dz);
+      b.yaw = Math.atan2(dx, dz); b.defuse = 0; b.plantT = 0;
+      if (dist < 5) { const nx = b.x - dx / dist * 3 * dt, nz = b.z - dz / dist * 3 * dt; if (!botAt(nx, b.z)) b.x = nx; if (!botAt(b.x, nz)) b.z = nz; }
+      b.fire -= dt;
+      if (b.fire <= 0) {
+        b.fire = 0.5 + Math.random() * 0.3;
+        if (Math.random() < Math.max(0.1, 0.5 - dist / 110)) {
+          if (tg === P) hurtPlayer(7 + Math.floor(Math.random() * 5));
+          else { tg.hp -= 16 + Math.floor(Math.random() * 9); tg.hitT = 0.18; if (tg.hp <= 0) killBot(tg, false); }
+        }
+        tracer(new THREE.Vector3(b.x, 1.3, b.z), new THREE.Vector3(x + (Math.random() - .5) * 0.6, y - 0.1 + (Math.random() - .5) * 0.4, z + (Math.random() - .5) * 0.6), b.side === R.side ? 0x9be89b : 0xff8a5b);
+        const hear = Math.hypot(b.x - P.x, b.z - P.z); sfx.shot(0.35 * Math.max(0.08, 1 - hear / 80), 0.8); noise(b.x, b.z);
       }
+    } else if (b.side === 'CT') ctBot(b, dt);
+    else tBot(b, dt);
+    b.g.position.set(b.x, 0, b.z); b.g.rotation.y = b.yaw;
+    if (b.hitT > 0) { b.hitT -= dt; b.body.material = botMatHit; } else b.body.material = b.mat;
+  }
+  function hold(b, h, dt) { if (navStep(b, h[0], h[1], P.speed, dt) < 0.8 && h[2] !== undefined) b.yaw = h[2]; }
+  function followRoute(b, list, dt) { if (b.wi < list.length && navStep(b, list[b.wi][0], list[b.wi][1], P.speed, dt) < 1.5) b.wi++; return b.wi >= list.length; }
+  // КТ: якоря держат свою точку, ротаторы идут на шум; после закладки все на разминирование
+  function ctBot(b, dt) {
+    if (R.phase === 'planted') {
+      if (navStep(b, R.bomb.x, R.bomb.z, P.speed, dt) < 1.3) { b.defuse += dt; R.defusing = b; if (b.defuse >= DEFUSE) roundEnd('CT', 'Бомба обезврежена'); } else b.defuse = 0;
+    } else hold(b, [b.hx, b.hz, b.look], dt);
+  }
+  function alert(site) {
+    if (R.alert === site || R.phase !== 'live') return; R.alert = site; let k = 0;
+    for (const b of bots) if (b.alive && b.side === 'CT' && b.role === 'rot' && b.home !== site) { [b.hx, b.hz, b.look] = MAP.sites[site].guard[2 + (k++ % 2)]; }
+  }
+  function noise(x, z) { if (MAP.mode !== 'bomb') return; for (const k in MAP.sites) { const st = MAP.sites[k]; if (Math.hypot(x - st.cx, z - st.cz) < 25) alert(k); } }
+  // Т: сбор → заход по маршрутам, носитель ставит бомбу; обход и засада; союзники игрока-Т идут за ним
+  function carry(b, dt) { if (navStep(b, R.plant[0], R.plant[1], P.speed, dt) < 0.9) { b.plantT += dt; if (b.plantT >= PLANT) plantBomb(b.x, b.z); } else b.plantT = 0; }
+  function tBot(b, dt) {
+    if (R.phase === 'live' && R.dropped && R.fetcher === b) { if (navStep(b, R.dropped.x, R.dropped.z, P.speed, dt) < 1) pickUp(b); return; }
+    if (R.phase !== 'live') return hold(b, b.fin, dt);                      // после закладки — охрана точки
+    if (R.carrier === b && (b.role !== 'main' || b.phase === 'exec' && b.wi >= b.go.length)) return carry(b, dt);
+    if (b.role === 'lurk') return hold(b, b.lurk, dt);
+    if (b.role === 'follow') {
+      const L = R.carrier === 'P' ? P : R.carrier;
+      if (L && L !== b) { const d = Math.hypot(L.x - b.x, L.z - b.z); if (d > 5) navStep(b, L.x, L.z, P.speed, dt); else b.yaw = Math.atan2(L.x - b.x, L.z - b.z); }
+      else hold(b, b.fin, dt);
       return;
     }
+    if (b.phase === 'pre') {
+      if (followRoute(b, b.pre, dt)) {
+        b.yaw = b.look;
+        if (R.plan.fake && b.role === 'main') { b.noiseT -= dt; if (b.noiseT <= 0) { b.noiseT = 1 + Math.random(); alert(R.plan.fake); sfx.shot(0.05, 0.8); } }   // шумят у ложной точки
+      }
+      if (R.elapsed >= R.plan.execAt) { b.phase = 'exec'; b.wi = 0; }
+      return;
+    }
+    if (followRoute(b, b.go, dt)) hold(b, b.fin, dt);
+  }
+  function pickUp(b) {
+    R.carrier = b; R.dropped = null; R.fetcher = null; bombG.visible = false;
+    if (!R.plant) {                                                          // союзник подобрал бомбу игрока — на ближайшую точку
+      let best = 1e9, site = 'A'; for (const k in MAP.sites) { const st = MAP.sites[k], f = navField(st.cx, st.cz), i = navFree(navIdx(b.x, b.z)); const d = f && i >= 0 ? f[i] : 1e9; if (d < best) { best = d; site = k; } }
+      const st = MAP.sites[site]; R.plant = [st.cx + (Math.random() - 0.5) * 4, st.cz + (Math.random() - 0.5) * 4];
+      bots.forEach((o, i) => { if (o.side === 'T') o.fin = st.guard[i % st.guard.length]; });
+    }
+  }
+  function dropBomb(x, z) { R.carrier = null; R.dropped = { x, z }; bombG.position.set(x, 0.2, z); bombG.visible = true; bombLed.visible = false; assignFetcher(); }
+  function assignFetcher() {
+    if (!R.dropped || (R.fetcher && R.fetcher.alive)) return; let best = 1e9; R.fetcher = null;
+    for (const o of bots) if (o.alive && o.side === 'T') { const d = Math.hypot(o.x - R.dropped.x, o.z - R.dropped.z); if (d < best) { best = d; R.fetcher = o; } }
+  }
+  function teamAlive(side) { return bots.filter(b => b.alive && b.side === side).length + (side === R.side && !P.dead ? 1 : 0); }
+  function updateCounts() {
+    if (MAP.mode !== 'bomb') return;
+    $('alive').textContent = bots.filter(b => b.alive && b.side !== R.side).length; $('allies').textContent = bots.filter(b => b.alive && b.side === R.side).length;
+  }
+  function checkTeams() {
+    if (R.phase !== 'live' && R.phase !== 'planted') return;
+    if (!teamAlive('CT')) return roundEnd('T', 'Все КТ уничтожены');
+    if (!teamAlive('T')) { if (R.phase === 'live') return roundEnd('CT', 'Все Т уничтожены'); setMsg('Все Т уничтожены — КТ разминируют', 3); }
+  }
+  function killPlayer() {
+    P.dead = true; P.hp = 0; gun.visible = false; firing = false;
+    if (R.carrier === 'P' && R.phase === 'live') dropBomb(P.x, P.z);
+    checkTeams(); updateCounts();
+  }
+  const allyMarkM = new THREE.MeshBasicMaterial({ color: 0x4fd18b, depthTest: false, transparent: true });
+  function markAlly(b) { const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.24), allyMarkM); m.position.y = 2.3; m.renderOrder = 10; b.g.add(m); }
+  const botMatHit = new THREE.MeshBasicMaterial({ color: 0xffd0c8 });
+  function killBot(b, byPlayer = true) {
+    if (!b.alive) return;
+    b.alive = false; if (byPlayer) { kills++; $('kills').textContent = kills; }
+    b.g.rotation.x = Math.PI / 2; b.g.position.y = 0.4;                // «падает»
+    setTimeout(() => { scene.remove(b.g); }, 4000);
+    if (MAP.mode === 'bomb') {
+      if (R.carrier === b && R.phase === 'live') { dropBomb(b.x, b.z); setMsg('Бомба упала', 3); }
+      assignFetcher(); updateCounts(); checkTeams();
+      return;
+    }
+    $('alive').textContent = bots.filter(x => x.alive).length;
     // новый противник появляется через пару секунд, чтобы бой не кончался
     setTimeout(() => { if (running) { spawnBot(); $('alive').textContent = bots.filter(x => x.alive).length; } }, 2500);
   }
@@ -671,14 +764,15 @@
     R.phase = 'planted'; R.bomb = { x, z, site: siteAt(x, z) || '?' }; R.bombT = BOMB_T; R.beepT = 0; R.actT = 0; R.carrier = null; R.dropped = null;
     bombG.position.set(x, 0.2, z); bombG.visible = true; sfx.beep();
     // Т после закладки занимают позиции вокруг точки
-    if (R.side === 'CT') { const g = MAP.sites[R.bomb.site] ? MAP.sites[R.bomb.site].guard : []; bots.forEach((b, i) => { if (g.length) { const p = g[i % g.length]; b.hx = p[0]; b.hz = p[1]; b.look = p[2]; } }); }
+    const g = MAP.sites[R.bomb.site] ? MAP.sites[R.bomb.site].guard : []; let k = 0;
+    for (const b of bots) if (b.side === 'T' && b.role !== 'lurk' && g.length) b.fin = g[k++ % g.length];
   }
   let actShown = null;
   function bombStep(dt, moving) {
     // кнопка действия: Т закладывает на точке, КТ разминирует у бомбы
     let act = null;
     if (!P.dead && P.y < 0.5) {
-      if (R.side === 'T' && R.phase === 'live' && siteAt(P.x, P.z)) act = 'plant';
+      if (R.side === 'T' && R.phase === 'live' && R.carrier === 'P' && siteAt(P.x, P.z)) act = 'plant';
       if (R.side === 'CT' && R.phase === 'planted' && Math.hypot(P.x - R.bomb.x, P.z - R.bomb.z) < 1.6) act = 'defuse';
     }
     const btn = $('plant');
@@ -690,6 +784,7 @@
     } else R.actT = 0;
     if (act) btn.style.background = R.actT > 0 ? `conic-gradient(rgba(255,176,0,.75) ${R.actT / (act === 'plant' ? PLANT : DEFUSE) * 360}deg, rgba(255,255,255,.10) 0)` : '';
     // таймеры раунда и бомбы
+    R.elapsed += dt;
     if (R.phase === 'live') { timeLeft -= dt; if (timeLeft <= 0) { timeLeft = 0; return roundEnd('CT', 'Время вышло'); } }
     else if (R.phase === 'planted') {
       R.bombT -= dt; R.beepT -= dt; R.ledT -= dt;
@@ -704,14 +799,11 @@
     const tl = R.phase === 'live' ? timeLeft : Math.max(0, R.bombT);
     $('time').textContent = Math.floor(tl / 60) + ':' + String(Math.floor(tl % 60)).padStart(2, '0'); $('time').classList.toggle('red', R.phase !== 'live');
     // гибель игрока: Т после закладки досматривает раунд, в остальных случаях раунд проигран
-    if (P.hp <= 0 && !P.dead) {
-      if (R.side === 'T' && R.phase === 'planted') { P.dead = true; P.hp = 0; gun.visible = false; }
-      else if (R.phase !== 'boom') return roundEnd(R.side === 'T' ? 'CT' : 'T', 'Вы погибли');
-    }
+    if (P.hp <= 0 && !P.dead) { killPlayer(); if (R.phase === 'over') return; if (R.phase !== 'boom') setMsg('Вы погибли — смотрите за командой', 3); }
     if (R.phase === 'planted') {
       if (R.defusing) setMsg(`КТ разминирует бомбу! ${Math.ceil(DEFUSE - R.defusing.defuse)}`, 0.2);
       else if (R.side === 'CT') setMsg(`Бомба на ${R.bomb.site} — разминируйте!`, 0.2);
-      else setMsg(P.dead ? 'Вы погибли. Бомба тикает…' : `Бомба заложена на ${R.bomb.site}`, 0.2);
+      else if (!msgT || msgT <= 0.2) setMsg(`Бомба заложена на ${R.bomb.site}`, 0.2);
     }
   }
   function roundEnd(winner, why) {
@@ -719,7 +811,7 @@
     const win = winner === R.side; R.phase = 'over'; running = false; firing = false; planting = false; R.score[win ? 0 : 1]++;
     $('overTitle').textContent = why + (win ? ' — победа!' : ' — поражение');
     $('overScore').textContent = R.score[0] + ' : ' + R.score[1];
-    $('overSub').textContent = `счёт раундов (вы за ${R.side === 'T' ? 'Т' : 'КТ'} : боты) · убито ${kills}`;
+    $('overSub').textContent = `счёт раундов (ваша команда ${R.side === 'T' ? 'Т' : 'КТ'} : соперник) · убито вами ${kills}`;
     $('again').textContent = 'Следующий раунд';
     $('plant').hidden = true; actShown = null;
     $('over').hidden = false; if (document.exitPointerLock) document.exitPointerLock();
@@ -737,7 +829,8 @@
     const dir = fwd.clone().add(new THREE.Vector3((Math.random() - .5) * w.spread * 2, (Math.random() - .5) * w.spread * 2, (Math.random() - .5) * w.spread * 2)).normalize();
     const from = camera.position.clone();
     ray.set(from, dir); ray.far = 200;
-    const targets = []; for (const b of bots) if (b.alive) { targets.push(b.body, b.head); }
+    const targets = []; for (const b of bots) if (b.alive && isEnemy(b)) { targets.push(b.body, b.head); }
+    noise(P.x, P.z);
     const hitsB = ray.intersectObjects(targets, false), hitsW = ray.intersectObjects(colliders, false);
     let end = from.clone().add(dir.clone().multiplyScalar(120));
     const wallD = hitsW.length ? hitsW[0].distance : 1e9, botD = hitsB.length ? hitsB[0].distance : 1e9;
@@ -767,7 +860,7 @@
     camera.getWorldDirection(fwd);
     const from = camera.position.clone();
     ray.set(from, fwd); ray.far = w.range;
-    const targets = []; for (const b of bots) if (b.alive) targets.push(b.body, b.head);
+    const targets = []; for (const b of bots) if (b.alive && isEnemy(b)) targets.push(b.body, b.head);
     const hits = ray.intersectObjects(targets, false);
     sfx.swing();
     if (hits.length && !wallHit(from, hits[0].point)) {
@@ -849,7 +942,11 @@
     camera.position.set(P.x, P.y + 1.6 + Math.sin(performance.now() / 180) * 0.015 * (l > 0.1 && P.grounded ? 1 : 0), P.z);
     camera.rotation.set(0, 0, 0, 'YXZ'); camera.rotation.y = P.yaw; camera.rotation.x = P.pitch + kickPitch;
     const gp = GUN_POS[wi]; gun.position.set(gp[0], gp[1] + recoil * 0.02, gp[2] + recoil * 0.06);
-    if (P.dead && R.bomb) { camera.position.set(R.bomb.x + 7, 9, R.bomb.z + 7); camera.lookAt(R.bomb.x, 0.5, R.bomb.z); }   // наблюдение за бомбой
+    if (P.dead) {                                                          // наблюдение: за живым союзником, иначе за бомбой
+      const a = bots.find(b => b.alive && b.side === R.side);
+      if (a) { camera.position.set(a.x - Math.sin(a.yaw) * 4, 3.2, a.z - Math.cos(a.yaw) * 4); camera.lookAt(a.x + Math.sin(a.yaw) * 6, 1.2, a.z + Math.cos(a.yaw) * 6); }
+      else if (R.bomb) { camera.position.set(R.bomb.x + 7, 9, R.bomb.z + 7); camera.lookAt(R.bomb.x, 0.5, R.bomb.z); }
+    }
     // боты
     R.defusing = null;
     for (const b of bots) botStep(b, dt);
@@ -889,22 +986,42 @@
     if (!MAP || MAP.id !== mapId) buildMap(mapId);
     const bomb = MAP.mode === 'bomb';
     if (bomb && (newMatch || R.side !== side)) R.score = [0, 0];
-    R.side = side; R.phase = bomb ? 'live' : 'off'; R.bomb = null; R.actT = 0; R.carrier = null; R.dropped = null; R.fetcher = null; R.defusing = null;
+    R.side = side; R.phase = bomb ? 'live' : 'off'; R.bomb = null; R.actT = 0; R.carrier = null; R.dropped = null; R.fetcher = null; R.defusing = null; R.plant = null; R.alert = null; R.elapsed = 0;
+    $('alliesBox').hidden = !bomb;
     bombG.visible = false; boom.visible = false; boom.scale.setScalar(1); bombLed.visible = false; P.dead = false; gun.visible = true; $('time').classList.remove('red'); setMsg('', 0);
     P.x = MAP.spawn[0]; P.z = MAP.spawn[1]; P.yaw = MAP.spawn[2]; P.y = 0; P.vy = 0; P.grounded = true; P.pitch = 0; P.hp = 100;
     if (bomb && side === 'CT') { [P.x, P.z] = MAP.spawnCT[0]; P.yaw = -Math.PI / 2; }
     ammo.forEach((a, i) => { a.mag = WEAPONS[i].mag; a.rest = WEAPONS[i].rest; }); wi = 0; ki = 0; knifeLayout(); gunLayout(); reloading = 0; cooldown = 0;
     kills = 0; timeLeft = bomb ? ROUND : 180; $('kills').textContent = '0';
     if (!bomb) for (let i = 0; i < 6; i++) spawnBot();
-    else if (side === 'T') { MAP.ctHold.forEach((h, i) => { const b = spawnBot(MAP.spawnCT[i], 'CT'); [b.hx, b.hz, b.look] = h; }); setMsg('Вы за Т: заложите бомбу на A или B', 4); }
     else {
-      // Т выбирают точку, у первого бомба; остальные идут на позиции вокруг неё
-      const site = MAP.sites[Math.random() < 0.5 ? 'A' : 'B'];
-      R.plant = [site.cx + (Math.random() - 0.5) * 4, site.cz + (Math.random() - 0.5) * 4];
-      MAP.spawnT.forEach((p, i) => { const b = spawnBot(p, 'T'); [b.hx, b.hz, b.look] = site.guard[i % site.guard.length]; });
-      R.carrier = bots[0]; setMsg('Вы за КТ: не дайте Т заложить бомбу', 4);
+      // КТ: якоря и ротаторы; у игрока-КТ четыре союзника занимают обе точки
+      const ctRoles = [['anchor', 'A'], ['rot', 'A'], ['anchor', 'B'], ['rot', 'B'], ['rot', null]];
+      MAP.ctHold.forEach((h, i) => { if (side === 'CT' && i === 4) return; const b = spawnBot(MAP.spawnCT[side === 'CT' ? i + 1 : i], 'CT'); [b.hx, b.hz, b.look] = h; [b.role, b.home] = ctRoles[i]; });
+      const tc = MAP.tac;
+      if (side === 'T') {
+        // союзники игрока-Т: двое идут за ним, один держит мид, один в засаде
+        [['follow'], ['follow'], ['mid'], ['lurk']].forEach(([role], i) => { const b = spawnBot(MAP.spawnT[i + 1], 'T'); b.role = role; b.fin = [tc.mid[0], tc.mid[1]]; b.lurk = role === 'mid' ? [tc.mid[0], tc.mid[1], 0] : tc.lurk.A; if (role === 'mid') b.role = 'lurk'; });
+        R.carrier = 'P'; setMsg('Вы за Т: бомба у вас, заложите на A или B', 4);
+      } else {
+        // Т-боты: точка, ложный заход в 30 % раундов, роли по плану
+        const site = Math.random() < 0.5 ? 'A' : 'B', other = site === 'A' ? 'B' : 'A', fake = Math.random() < 0.3 ? other : null, st = MAP.sites[site];
+        R.plan = { site, fake, execAt: 14 + Math.random() * 8 + (fake ? 6 : 0) };
+        R.plant = [st.cx + (Math.random() - 0.5) * 4, st.cz + (Math.random() - 0.5) * 4];
+        const roles = site === 'A' ? ['main', 'main', 'mid', 'mid', 'lurk'] : ['main', 'main', 'main', 'flank', 'lurk'];
+        roles.forEach((role, i) => {
+          const b = spawnBot(MAP.spawnT[i], 'T'); b.role = role; b.phase = 'pre'; b.wi = 0; b.noiseT = Math.random(); b.fin = st.guard[i % st.guard.length]; b.lurk = tc.lurk[site];
+          if (role === 'main') { b.pre = [fake ? tc.stage[fake] : tc.stage[site]]; b.go = fake ? [tc.stage[site], ...tc.go[site]] : tc.go[site]; }
+          if (role === 'mid') { b.pre = [tc.mid]; b.go = tc.midGo[site]; }
+          if (role === 'flank') { b.pre = tc.flank; b.go = tc.flankGo; }
+          b.look = 0;
+        });
+        R.carrier = bots.find(b => b.side === 'T' && b.role === 'main'); setMsg('Вы за КТ: не дайте Т заложить бомбу', 4);
+      }
+      for (const b of bots) { b.scan = Math.random() * 0.3; b.target = null; if (b.side === side) markAlly(b); }
+      updateCounts();
     }
-    $('alive').textContent = bots.length;
+    if (!bomb) $('alive').textContent = bots.length;
     for (const k of kits) { k.on = true; k.g.visible = true; k.t = 0; }
     updateAmmo(); $('start').hidden = true; $('over').hidden = true; running = true; sfx.init();
   }
@@ -913,32 +1030,36 @@
   let last = 0;
   function loop(ts) { const dt = Math.min(0.05, (ts - last) / 1000 || 0.016); last = ts; if (running) step(dt); renderer.render(scene, camera); requestAnimationFrame(loop); }
   // ?sim=1 — прогон логики без экрана: игрок стоит, боты ищут его; результат в title
-  // ?sim=bomb — прогон режима «Закладка» на Likestone за обе стороны; итог в title
+  // ?sim=bomb — прогон режима «Закладка» на Likestone (5 на 5); итог в title
   if (q.get('sim') === 'bomb') {
     mapId = 'likestone'; const out = [], run = (sec, until) => { let i = 0; for (; i < sec * 60 && running && !(until && until()); i++) { scene.updateMatrixWorld(true); step(1 / 60); } return (i / 60).toFixed(1); };
-    const far = () => { P.x = 300; P.z = 300; P.y = 0; };                    // игрок вне карты — боты его не видят
+    const far = () => { P.x = 300; P.z = 300; P.y = 0; P.hp = 1e9; };     // игрок вне карты: его не видят, он не мешает
     side = 'T'; start(true);
     const reach = (a, b) => { const f = navField(b[0], b[1]), k = navFree(navIdx(a[0], a[1])); return f && k >= 0 && f[k] < 1e9 ? Math.round(f[k]) : 'нет'; };
     const A = [MAP.sites.A.cx, MAP.sites.A.cz], B = [MAP.sites.B.cx, MAP.sites.B.cz];
     out.push(`путь T→A ${reach(MAP.spawn, A)} T→B ${reach(MAP.spawn, B)} CT→A ${reach(MAP.spawnCT[0], A)} CT→B ${reach(MAP.spawnCT[0], B)} м`);
-    // 1) за Т: КТ расходятся по позициям, игрок закладывает на B, уходит — КТ должны разминировать
-    far(); P.hp = 1e9;
-    let t = run(40, () => bots.every(b => Math.hypot(b.x - b.hx, b.z - b.hz) < 1));
-    if (q.get("dbg")) out.push(bots.map(b => `(${b.x.toFixed(1)},${b.z.toFixed(1)})→(${b.hx.toFixed(1)},${b.hz.toFixed(1)}) f=${(navField(b.hx, b.hz)[navFree(navIdx(b.x, b.z))] || 0).toFixed(0)}`).join(" "));
-    out.push(`КТ на позициях ${bots.filter(b => Math.hypot(b.x - b.hx, b.z - b.hz) < 1).length}/5 за ${t}с`);
-    P.x = B[0]; P.z = B[1]; planting = true; t = run(5, () => R.phase !== 'live'); planting = false; out.push(`закладка ${R.phase} за ${t}с`);
-    far(); t = run(45); out.push(`итог «${$('overTitle').textContent}» за ${t}с`);
-    // 2) за Т: КТ не двигаются — бомба должна взорваться
-    start(false); P.x = A[0]; P.z = A[1]; P.hp = 1e9; plantBomb(P.x, P.z); far(); for (const b of bots) b.alive = false;
-    t = run(45); out.push(`без разминирования «${$('overTitle').textContent}» за ${t}с`);
-    // 3) за КТ: Т несут бомбу на точку и закладывают
-    side = 'CT'; start(true); far(); P.hp = 1e9; const target = siteAt(...R.plant);
-    t = run(80, () => R.phase !== 'live'); out.push(`Т цель ${target}: ${R.phase === 'planted' ? 'заложили на ' + R.bomb.site : R.phase} за ${t}с`);
-    // 4) за КТ: убили носителя — бомбу подбирают и всё равно закладывают
-    start(false); far(); P.hp = 1e9; const tg2 = siteAt(...R.plant); run(6); killBot(R.carrier); const dropped = !!R.dropped;
-    t = run(90, () => R.phase !== 'live'); out.push(`носитель убит (бомба упала: ${dropped}), цель ${tg2}: ${R.phase === 'planted' ? 'заложили на ' + R.bomb.site : R.phase} за ${t}с`);
-    // 5) за КТ: игрок разминирует
-    if (R.phase === 'planted') { P.x = R.bomb.x + 0.5; P.z = R.bomb.z; for (const b of bots) b.alive = false; planting = true; t = run(8); planting = false; out.push(`разминирование «${$('overTitle').textContent}» за ${t}с`); }
+    // 1) тактика Т-ботов без помех: союзников-КТ убираем, игрок вне карты — Т должны заложить
+    const plans = [];
+    for (let r = 0; r < 4; r++) {
+      side = 'CT'; start(r === 0); far(); for (const b of bots) if (b.side === 'CT') b.alive = false;
+      const pl = R.plan; let execMoved = 0; const t = run(80, () => R.phase !== 'live');
+      plans.push(`${pl.site}${pl.fake ? '(ложн.' + pl.fake + ')' : ''}→${R.phase === 'planted' ? 'заложили ' + R.bomb.site : R.phase} ${t}с`);
+    }
+    out.push('Т без помех: ' + plans.join(', '));
+    // 2) союзник подбирает бомбу погибшего игрока-Т и закладывает (КТ убраны)
+    side = 'T'; start(true); for (const b of bots) if (b.side === 'CT') b.alive = false; R.phase = 'live';
+    killPlayer(); const fetched = !!R.fetcher; running = true; R.phase = 'live';
+    let t = run(80, () => R.phase !== 'live'); out.push(`бомба игрока подобрана: ${fetched}, ${R.phase === 'planted' ? 'заложили ' + R.bomb.site : R.phase} ${t}с`);
+    // 3) полные раунды бот против бота: игрок погибает в начале, дальше играют команды
+    for (const sd of ['T', 'CT']) {
+      const res = {};
+      for (let r = 0; r < 8; r++) { side = sd; start(r === 0); killPlayer(); const tt = run(160); const k = $('overTitle').textContent.replace(/ — .*/, ''); res[k] = (res[k] || 0) + 1; }
+      out.push(`за ${sd} (игрок выбыл): ` + Object.entries(res).map(([k, v]) => `${k} ×${v}`).join(', '));
+    }
+    // 4) игрок-КТ разминирует сам
+    side = 'CT'; start(true); far(); for (const b of bots) if (b.side === 'CT') b.alive = false;
+    run(80, () => R.phase !== 'live');
+    if (R.phase === 'planted') { for (const b of bots) b.alive = false; P.x = R.bomb.x + 0.5; P.z = R.bomb.z; planting = true; t = run(8); planting = false; out.push(`разминирование «${$('overTitle').textContent}» за ${t}с`); }
     document.title = 'bomb: ' + out.join(' | ');
   }
   // ?sim=climb — подъём по лестницам башни и балкона на Likestone
