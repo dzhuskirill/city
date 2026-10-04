@@ -596,13 +596,13 @@
   function botTask(b, dt) {
     if (b.side === 'CT') {
       if (R.phase === 'planted') {
-        if (navStep(b, R.bomb.x, R.bomb.z, 5.0, dt) < 1.3) { b.defuse += dt; R.defusing = b; if (b.defuse >= DEFUSE) roundEnd('CT', 'Бомба обезврежена'); } else b.defuse = 0;
-      } else if (navStep(b, b.hx, b.hz, 5.0, dt) < 0.8) b.yaw = b.look;
+        if (navStep(b, R.bomb.x, R.bomb.z, P.speed, dt) < 1.3) { b.defuse += dt; R.defusing = b; if (b.defuse >= DEFUSE) roundEnd('CT', 'Бомба обезврежена'); } else b.defuse = 0;
+      } else if (navStep(b, b.hx, b.hz, P.speed, dt) < 0.8) b.yaw = b.look;
     } else if (R.phase === 'live' && R.carrier === b) {
-      if (navStep(b, R.plant[0], R.plant[1], 3.6, dt) < 0.9) { b.plantT += dt; if (b.plantT >= PLANT) plantBomb(b.x, b.z); } else b.plantT = 0;
+      if (navStep(b, R.plant[0], R.plant[1], P.speed, dt) < 0.9) { b.plantT += dt; if (b.plantT >= PLANT) plantBomb(b.x, b.z); } else b.plantT = 0;
     } else if (R.phase === 'live' && R.dropped && R.fetcher === b) {
-      if (navStep(b, R.dropped.x, R.dropped.z, 4.0, dt) < 1) { R.carrier = b; R.dropped = null; R.fetcher = null; bombG.visible = false; }
-    } else if (navStep(b, b.hx, b.hz, 3.6, dt) < 0.8) b.yaw = b.look;
+      if (navStep(b, R.dropped.x, R.dropped.z, P.speed, dt) < 1) { R.carrier = b; R.dropped = null; R.fetcher = null; bombG.visible = false; }
+    } else if (navStep(b, b.hx, b.hz, P.speed, dt) < 0.8) b.yaw = b.look;
   }
   const botMatHit = new THREE.MeshBasicMaterial({ color: 0xffd0c8 });
   function killBot(b) {
