@@ -26,6 +26,7 @@
   .top { position: absolute; left: 0; right: 0; top: calc(10px + env(safe-area-inset-top)); display: flex; justify-content: center; gap: 22px; font-variant-numeric: tabular-nums; }
   .top div { text-align: center; }
   .top b { display: block; font-size: 24px; font-weight: 800; line-height: 1; }
+  .top b.red { color: var(--danger); }
   .top span { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
   .cross { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; transform: translate(-50%, -50%); }
   .cross::before, .cross::after { content: ''; position: absolute; background: rgba(255,255,255,.9); box-shadow: 0 0 0 1px rgba(0,0,0,.6); }
@@ -47,6 +48,10 @@
   #reload { right: 122px; bottom: calc(34px + env(safe-area-inset-bottom)); width: 58px; height: 58px; }
   #fs { left: 18px; top: calc(14px + env(safe-area-inset-top)); width: 40px; height: 40px; font-size: 16px; }
   #jump { right: 122px; bottom: calc(112px + env(safe-area-inset-bottom)); width: 58px; height: 58px; font-size: 22px; }
+  #plant { left: 50%; margin-left: -46px; bottom: calc(22px + env(safe-area-inset-bottom)); width: 92px; height: 92px; flex-direction: column; font-size: 12px; }
+  #plant span { font-size: 28px; line-height: 1; }
+  .btn[hidden] { display: none; }
+  .msg { position: absolute; left: 0; right: 0; top: calc(58px + env(safe-area-inset-top)); text-align: center; font-weight: 800; font-size: 16px; color: var(--accent); text-shadow: 0 0 6px #000, 0 0 2px #000; }
   #swap { right: 30px; bottom: calc(190px + env(safe-area-inset-bottom)); width: 58px; height: 58px; }
   #stick { position: fixed; left: 0; bottom: 0; width: 50vw; height: 60vh; pointer-events: none; }
   #stick .base { position: absolute; width: 110px; height: 110px; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); background: rgba(255,255,255,.06); display: none; transform: translate(-50%,-50%); }
@@ -54,7 +59,8 @@
   #diag { position: fixed; left: 12px; right: 12px; top: calc(52px + env(safe-area-inset-top)); z-index: 6; background: rgba(20,10,10,.88); color: #ffd9d4; border: 1px solid rgba(255,80,60,.5); border-radius: 8px; padding: 10px 12px; font-size: 12px; white-space: pre-wrap; pointer-events: auto; }
   .overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 24px;
     background: rgba(14,17,22,.82); z-index: 5; }
-  .overlay[hidden] { display: none; }
+  .overlay[hidden], .maps[hidden], .sub[hidden] { display: none; }
+  #start { overflow-y: auto; justify-content: safe center; touch-action: pan-y; }
   .overlay h1 { margin: 0; font-size: 46px; font-weight: 900; letter-spacing: -.03em; }
   .overlay .sub { color: var(--muted); max-width: 340px; }
   .overlay .big { font-size: 54px; font-weight: 900; line-height: 1; }
@@ -70,6 +76,7 @@
 <canvas id="c"></canvas>
 <div class="hud">
   <div class="top"><div><b id="kills">0</b><span>убито</span></div><div><b id="time">3:00</b><span>время</span></div><div><b id="alive">6</b><span>врагов</span></div></div>
+  <div class="msg" id="msg"></div>
   <div class="cross"><i></i></div><div class="hit" id="hitmark"></div><div class="dmg" id="dmg"></div>
   <div class="hp"><div class="bar"><i id="hpbar"></i></div><div class="n">здоровье <span id="hpn">100</span></div></div>
   <div class="ammo"><div class="w" id="wname">автомат</div><b id="mag">30</b> <span id="rest">/ 90</span></div>
@@ -81,10 +88,13 @@
 <div class="btn" id="swap">⇄</div>
 <div class="btn" id="jump">↑</div>
 <div class="btn" id="fs">⛶</div>
+<div class="btn" id="plant" hidden><span>💣</span>заложить</div>
 <div class="overlay" id="start">
   <h1>Квартал</h1>
   <div class="sub">Одиночный бой в городском квартале. Левая половина экрана — ходьба (виртуальный стик), правая — прицел (тяните), кнопка «Огонь». Оружие: автомат, пистолет и нож (⇄) — с ножом бегаешь быстрее, удар в спину валит сразу. Кнопка ↑ — прыжок: можно запрыгнуть на ящики, машины и контейнеры. С ножом кнопка R меняет нож: тактический, керамбит, бабочка. Аптечки (белые ящики с крестом): +50 HP. Продержитесь 3 минуты и выбейте как можно больше противников.</div>
+  <div class="sub" id="modeInfo" hidden><b>Likestone — режим «Закладка»</b>, вы против пяти ботов. За Т: встаньте на точку A или B и держите 💣 3 с; бомба взрывается через 40 с. За КТ: не дайте Т заложить бомбу, а если заложили — держите кнопку у бомбы 5 с. На балкон и второй этаж башни ведут лестницы.</div>
   <div class="maps" id="maps"></div>
+  <div class="maps" id="sides" hidden></div>
   <button type="button" id="go">В бой</button>
   <div class="sub" style="font-size:12px">Чёрный экран? <a href="?safe=1" style="color:var(--accent)">Облегчённый режим</a> · <a href="?debug=1" style="color:var(--muted)">диагностика</a></div>
 </div>
@@ -257,11 +267,164 @@
       return { size: SIZE, spawn: [-half + 14, half - 14, -Math.PI / 4], center: [0, 0],
         kits: [[0, -20], [-45, -45], [45, 45], [45, -45], [-45, 45]] };
     } },
+    likestone: { name: 'Likestone', seed: 77, mode: 'bomb', build() {
+      // карта нарисована Кириллом (фото 04.10.2026): координаты — пиксели рисунка, 0,12 м на пиксель
+      const S = 0.12, X = px => (px - 696) * S, Z = py => (py - 331) * S, T = 0.6, at = (px, py) => [X(px), Z(py)];
+      addGround(130, 0x6b665e);
+      const wallTex = (base, h) => new THREE.MeshLambertMaterial({ map: winTex(base, 24, h) });
+      const outerM = wallTex('#a3968a', 8), towerM = wallTex('#7b8a99', 9), innerM = lam(0x8b8378), floorM = lam(0x6d6a66), stairM = lam(0x7a746b), railM = lam(0x2a2f36);
+      // стена по линии рисунка; gaps — проёмы [от, до (px вдоль стены), низ, верх (м)]
+      function wall(ax, ay, bx, by, h, mat, gaps = []) {
+        const horiz = ay === by, conv = horiz ? X : Z;
+        const put = (p0, p1, y0, y1) => { if (p1 - p0 < 0.01 || y1 - y0 < 0.01) return; const c = (p0 + p1) / 2;
+          if (horiz) addBox(c, Z(ay), p1 - p0, T, y1 - y0, mat, y0); else addBox(X(ax), c, T, p1 - p0, y1 - y0, mat, y0); };
+        let cur = conv(Math.min(horiz ? ax : ay, horiz ? bx : by)) - T / 2; const end = conv(Math.max(horiz ? ax : ay, horiz ? bx : by)) + T / 2;
+        for (const [g0, g1, y0, y1] of gaps.slice().sort((a, b) => a[0] - b[0])) { const s0 = conv(g0), s1 = conv(g1); put(cur, s0, 0, h); put(s0, s1, 0, y0); put(s0, s1, y1, h); cur = s1; }
+        put(cur, end, 0, h);
+      }
+      // наклонная стена: один повёрнутый блок для вида и пуль, цепочка AABB для столкновений
+      function diag(ax, ay, bx, by, h, mat) {
+        const [x1, z1] = at(ax, ay), [x2, z2] = at(bx, by), len = Math.hypot(x2 - x1, z2 - z1);
+        const m = new THREE.Mesh(new THREE.BoxGeometry(len + T, h, T), mat); m.position.set((x1 + x2) / 2, h / 2, (z1 + z2) / 2); m.rotation.y = -Math.atan2(z2 - z1, x2 - x1);
+        m.castShadow = m.receiveShadow = true; world.add(m); colliders.push(m);
+        const n = Math.ceil(len / 0.4), r = 0.35;
+        for (let i = 0; i <= n; i++) { const cx = x1 + (x2 - x1) * i / n, cz = z1 + (z2 - z1) * i / n; solids.push({ x1: cx - r, z1: cz - r, x2: cx + r, z2: cz + r, y0: 0, h }); }
+      }
+      const pad = (x1, y1, x2, y2, color) => addPad((X(x1) + X(x2)) / 2, (Z(y1) + Z(y2)) / 2, (x2 - x1) * S, (y2 - y1) * S, color);
+      const dashM = new THREE.MeshBasicMaterial({ color: 0xf2efe6 });
+      function dashes(ax, ay, bx, by) {                                        // пунктир с рисунка — граница зоны спавна
+        const [x1, z1] = at(ax, ay), [x2, z2] = at(bx, by), len = Math.hypot(x2 - x1, z2 - z1), n = Math.floor(len / 1.2);
+        for (let i = 0; i < n; i++) { const t = (i + 0.5) / n, d = new THREE.Mesh(new THREE.PlaneGeometry(x1 === x2 ? 0.25 : 0.6, x1 === x2 ? 0.6 : 0.25), dashM);
+          d.rotation.x = -Math.PI / 2; d.position.set(x1 + (x2 - x1) * t, 0.22, z1 + (z2 - z1) * t); world.add(d); }
+      }
+      function letter(ch, px, py, size) {
+        const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+        g.fillStyle = '#f2e6d0'; g.font = 'bold 110px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(ch, 64, 70);
+        const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding;
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false }));
+        m.rotation.x = -Math.PI / 2; const [x, z] = at(px, py); m.position.set(x, 0.22, z); world.add(m);
+      }
+      // зоны: спавн КТ (синий), спавн Т (оранжевый), точки A и B
+      pad(170, 125, 385, 260, 0x2e6fb5); pad(830, 450, 980, 590, 0xd9822b);
+      dashes(250, 260, 395, 260); dashes(385, 125, 385, 260); dashes(830, 450, 980, 450);
+      const sites = { A: [1030, 140, 1180, 265], B: [455, 245, 625, 365] };
+      for (const k in sites) { const [x1, y1, x2, y2] = sites[k]; pad(x1, y1, x2, y2, 0x8a5a2b); letter(k, (x1 + x2) / 2, (y1 + y2) / 2, 7); }
+      // внешний контур
+      for (const [ax, ay, bx, by] of [[170, 125, 385, 125], [170, 125, 170, 260], [170, 260, 250, 260], [250, 260, 250, 603], [250, 603, 670, 603], [670, 450, 670, 603],
+        [830, 450, 830, 590], [830, 590, 980, 590], [980, 280, 980, 590], [875, 280, 1222, 280], [1222, 120, 1222, 280], [560, 120, 1222, 120],
+        [560, 60, 560, 120], [385, 60, 560, 60], [385, 60, 385, 125]]) wall(ax, ay, bx, by, 8, outerM);
+      // внутренние стены: B, зигзаг перед A
+      for (const [ax, ay, bx, by] of [[395, 200, 580, 200], [395, 200, 395, 400], [395, 400, 517, 400], [517, 400, 517, 525], [517, 525, 610, 525], [875, 175, 875, 280], [915, 120, 915, 235]]) wall(ax, ay, bx, by, 5, innerM);
+      diag(580, 200, 665, 290, 5, innerM);
+      // вход на A (коричневая метка на рисунке): арка с перемычкой и низкой стенкой-укрытием
+      wall(995, 120, 995, 280, 5, innerM, [[236, 276, 0, 3]]);
+      addBox(X(995), (Z(236) + Z(252)) / 2, T, (252 - 236) * S, 1.1, innerM);
+      // башня: два этажа; двери со стороны улицы и B, окна второго этажа на мид, B и улицу
+      const F2 = 3.4, W0 = F2 + 0.9, W1 = F2 + 2.1;
+      wall(670, 290, 830, 290, 9, towerM, [[700, 730, W0, W1], [770, 800, W0, W1]]);
+      wall(670, 290, 670, 450, 9, towerM, [[310, 345, W0, W1], [395, 430, 0, 2.6]]);
+      wall(830, 290, 830, 450, 9, towerM, [[320, 355, 0, 2.6], [385, 420, W0, W1]]);
+      wall(670, 450, 830, 450, 9, towerM);
+      const tx1 = X(670) + T / 2, tx2 = X(830) - T / 2, tz1 = Z(290) + T / 2, tz2 = Z(450) - T / 2;
+      const hx1 = tx1 + 4.2, hx2 = hx1 + 6, hz1 = tz2 - 3;                     // проём в перекрытии над лестницей
+      const slab = (x1, z1, x2, z2, y) => addBox((x1 + x2) / 2, (z1 + z2) / 2, x2 - x1, z2 - z1, 0.2, floorM, y - 0.2);
+      slab(tx1, tz1, tx2, hz1, F2); slab(hx2, hz1, tx2, tz2, F2); slab(tx1, hz1, hx1, tz2, F2);
+      for (let i = 1; i <= 9; i++) addBox(hx1 + 0.6 * (i + 0.5), (hz1 + 0.6 + tz2) / 2, 0.6, tz2 - hz1 - 0.6, F2 * i / 9, stairM);
+      addBox((hx1 + hx2) / 2, hz1, hx2 - hx1, 0.12, 1, railM, F2); addBox(hx1, (hz1 + tz2) / 2, 0.12, tz2 - hz1, 1, railM, F2);
+      // балкон: площадка 3 м над выходом из спавна КТ, лестница со стороны мида
+      const B2 = 3, bx1 = X(385) + T / 2, bx2 = X(560) - T / 2, bz1 = Z(60) + T / 2, bz2 = Z(110);
+      slab(bx1, bz1, bx2, bz2, B2);
+      for (let i = 1; i <= 8; i++) addBox(bx2 - 1, bz2 + 0.6 * (8 - i) + 0.3, 2, 0.6, B2 * i / 8, stairM);
+      addBox((bx1 + bx2 - 2) / 2, bz2, bx2 - 2 - bx1, 0.12, 1, railM, B2);
+      // чёрный квадрат на рисунке — штабель ящиков; передний ряд пониже, чтобы залезть
+      for (let i = 0; i < 5; i++) for (let j = 0; j < 5; j++) {
+        const x = X(262) + 1.2 + i * 2.5, z = Z(490) + 1.2 + j * 2.5;
+        if (i === 4) { if (j % 2 === 0) addBox(x, z, 1.2, 1.2, 1.2, woodM); continue; }
+        if (rnd() < 0.2) continue;
+        addBox(x, z, 2.4, 2.4, 2.4, woodM); if (rnd() < 0.35) addBox(x, z, 1.2, 1.2, 1.2, woodM, 2.4);
+      }
+      // укрытия: мид, улица, площадь, низ у B, точки
+      container(...at(720, 180), true, 0, contM[1]);
+      for (const [px, py, sz] of [[600, 150, 1.2], [800, 250, 2.4], [480, 165, 1.2], [850, 200, 1.2], [860, 430, 2.4], [330, 320, 2.4], [330, 300, 1.2], [360, 430, 1.2],
+        [450, 570, 2.4], [640, 560, 1.2], [580, 470, 2.4], [420, 230, 1.2], [640, 380, 1.2], [1200, 140, 2.4], [1205, 262, 1.2], [1100, 150, 1.2], [950, 160, 2.4]]) crate(...at(px, py), sz);
+      car(...at(905, 380), Math.PI / 2);
+      // позиции у точек: первые две — для обороны КТ, все — для Т после закладки
+      const guard = { A: [[1060, 175], [1160, 250], [1040, 250], [1180, 175]], B: [[470, 300], [600, 385], [560, 260], [430, 370]] };
+      const looks = { A: [995, 256], B: [640, 500] };
+      const pt = ([px, py], [lx, ly]) => { const [x, z] = at(px, py), [tx, tz] = at(lx, ly); return [x, z, Math.atan2(tx - x, tz - z)]; };
+      const siteM = {}; for (const k in sites) { const [x1, y1, x2, y2] = sites[k]; siteM[k] = { x1: X(x1), z1: Z(y1), x2: X(x2), z2: Z(y2), cx: X((x1 + x2) / 2), cz: Z((y1 + y2) / 2),
+        guard: guard[k].map(g => pt(g, k === 'A' ? looks.A : [g[0] < 520 ? 640 : 670, g[0] < 520 ? 500 : 412])) }; }
+      return { size: 130, spawn: [...at(905, 520), 0], center: at(720, 215), bounds: [-65, -35, 65, 36], sites: siteM,
+        spawnT: [[880, 480], [930, 480], [870, 540], [905, 560], [950, 540]].map(p => at(...p)),
+        spawnCT: [[220, 160], [300, 160], [250, 220], [340, 200], [200, 230]].map(p => at(...p)),
+        ctHold: [siteM.A.guard[0], siteM.A.guard[1], siteM.B.guard[0], siteM.B.guard[1], pt([700, 230], [850, 285])],
+        kits: [at(760, 215), at(300, 350)] };
+    } },
   };
+  // ── навигация ботов: сетка 1 м, поле расстояний до цели (Дейкстра, 8 соседей без срезания углов) ──
+  let NAV = null;
+  function buildNav([bx1, bz1, bx2, bz2]) {
+    const nx = Math.ceil(bx2 - bx1), nz = Math.ceil(bz2 - bz1), free = new Uint8Array(nx * nz).fill(1), m = 0.5;
+    for (const s of solids) {
+      if (s.y0 >= 1.7) continue;                                             // перекрытия и перемычки ботам не мешают
+      for (let j = Math.max(0, Math.floor(s.z1 - m - bz1)); j <= Math.min(nz - 1, Math.floor(s.z2 + m - bz1)); j++)
+        for (let i = Math.max(0, Math.floor(s.x1 - m - bx1)); i <= Math.min(nx - 1, Math.floor(s.x2 + m - bx1)); i++) {
+          const cx = bx1 + i + 0.5, cz = bz1 + j + 0.5; if (cx > s.x1 - m && cx < s.x2 + m && cz > s.z1 - m && cz < s.z2 + m) free[j * nx + i] = 0; }
+    }
+    return { x0: bx1, z0: bz1, nx, nz, free, fields: {} };
+  }
+  const NB = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.414], [1, -1, 1.414], [-1, 1, 1.414], [-1, -1, 1.414]];
+  function navIdx(x, z) { const i = Math.floor(x - NAV.x0), j = Math.floor(z - NAV.z0); return i < 0 || j < 0 || i >= NAV.nx || j >= NAV.nz ? -1 : j * NAV.nx + i; }
+  function navCenter(k) { return [NAV.x0 + k % NAV.nx + 0.5, NAV.z0 + Math.floor(k / NAV.nx) + 0.5]; }
+  function navFree(k) {                                                    // ближайшая свободная клетка
+    if (k < 0 || NAV.free[k]) return k;
+    const i0 = k % NAV.nx, j0 = Math.floor(k / NAV.nx);
+    for (let r = 1; r < 6; r++) for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
+      const i = i0 + di, j = j0 + dj; if (i >= 0 && j >= 0 && i < NAV.nx && j < NAV.nz && NAV.free[j * NAV.nx + i]) return j * NAV.nx + i; }
+    return -1;
+  }
+  function navField(x, z) {
+    const g = navFree(navIdx(x, z)); if (g < 0) return null;
+    if (NAV.fields[g]) return NAV.fields[g];
+    const { nx, nz, free } = NAV, d = new Float32Array(nx * nz).fill(Infinity), heap = [[0, g]]; d[g] = 0;
+    const push = e => { heap.push(e); let i = heap.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (heap[p][0] <= heap[i][0]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; i = p; } };
+    const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let i = 0;
+      for (;;) { const l = 2 * i + 1, r = l + 1; let s = i; if (l < heap.length && heap[l][0] < heap[s][0]) s = l; if (r < heap.length && heap[r][0] < heap[s][0]) s = r; if (s === i) break; [heap[s], heap[i]] = [heap[i], heap[s]]; i = s; } } return top; };
+    while (heap.length) {
+      const [dk, k] = pop(); if (dk > d[k]) continue; const i = k % nx, j = Math.floor(k / nx);
+      for (const [di, dj, c] of NB) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= nx || b >= nz) continue; const n = b * nx + a;
+        if (!free[n] || (di && dj && (!free[j * nx + a] || !free[b * nx + i]))) continue;
+        if (dk + c < d[n]) { d[n] = dk + c; push([d[n], n]); } }
+    }
+    return (NAV.fields[g] = d);
+  }
+  function navNext(f, k) {                                                 // соседняя клетка ближе к цели
+    const { nx, nz, free } = NAV, i = k % nx, j = Math.floor(k / nx); let best = f[k], bn = -1;
+    for (const [di, dj] of NB) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= nx || b >= nz) continue; const n = b * nx + a;
+      if (!free[n] || (free[k] && di && dj && (!free[j * nx + a] || !free[b * nx + i]))) continue; if (f[n] < best) { best = f[n]; bn = n; } }
+    return bn;
+  }
+  function clearSeg(x1, z1, x2, z2) { const n = Math.ceil(Math.hypot(x2 - x1, z2 - z1) / 0.3); for (let i = 1; i <= n; i++) if (botAt(x1 + (x2 - x1) * i / n, z1 + (z2 - z1) * i / n)) return false; return true; }
+  // шаг бота к цели по полю; возвращает оставшееся расстояние
+  function navStep(b, gx, gz, speed, dt) {
+    const f = navField(gx, gz), k = navIdx(b.x, b.z); let tx = gx, tz = gz;
+    if (f && k >= 0 && !(f[k] <= 1.5)) {
+      // до трёх клеток вперёд, но только если к ней прямой проход — иначе бот цепляет торцы стен
+      let a = k; const chain = []; for (let s = 0; s < 3; s++) { const n = navNext(f, a); if (n < 0) break; chain.push(a = n); }
+      if (b.stuck > 0.6) chain.length = Math.min(chain.length, 1), chain.unshift(navFree(k));      // застрял — сперва в центр своей клетки
+      for (let s = chain.length - 1; s >= 0; s--) { const [cx, cz] = navCenter(chain[s]); if (s === 0 || clearSeg(b.x, b.z, cx, cz)) { tx = cx; tz = cz; break; } }
+    }
+    const dx = tx - b.x, dz = tz - b.z, d = Math.hypot(dx, dz), x0 = b.x, z0 = b.z;
+    if (d > 0.05) { const sp = Math.min(d, speed * dt), nx = b.x + dx / d * sp, nz = b.z + dz / d * sp;
+      if (!botAt(nx, b.z)) b.x = nx; if (!botAt(b.x, nz)) b.z = nz; b.yaw = Math.atan2(dx, dz);
+      const moved = Math.hypot(b.x - x0, b.z - z0); b.stuck = moved < sp * 0.3 ? (b.stuck || 0) + dt : Math.max(0, (b.stuck || 0) - dt); if (b.stuck > 1.6) b.stuck = 0; }
+    return Math.hypot(gx - b.x, gz - b.z);
+  }
   function buildMap(id) {
     while (world.children.length) world.remove(world.children[0]);
     solids = []; colliders = []; seed = MAPS[id].seed;
-    MAP = MAPS[id].build(); MAP.id = id;
+    MAP = MAPS[id].build(); MAP.id = id; MAP.mode = MAPS[id].mode;
+    NAV = MAP.mode === 'bomb' ? buildNav(MAP.bounds) : null;
     for (const k of kits) scene.remove(k.g); kits.length = 0;
     for (const [x, z] of MAP.kits) medkit(x, z);
     sc.left = -MAP.size * 0.6; sc.right = MAP.size * 0.6; sc.top = MAP.size * 0.6; sc.bottom = -MAP.size * 0.6; sun.shadow.camera.updateProjectionMatrix();
@@ -379,15 +542,18 @@
   // ── боты ──────────────────────────────────────────────────────────────
   const bots = [];
   const botMat = new THREE.MeshLambertMaterial({ color: 0x6b2b2b }), botMat2 = new THREE.MeshLambertMaterial({ color: 0xd9b38c });
-  function spawnBot() {
+  const botMatCT = new THREE.MeshLambertMaterial({ color: 0x2c4a7a }), botMatT = new THREE.MeshLambertMaterial({ color: 0x8a6a3a });
+  function spawnBot(at, side) {
+    const mat = side === 'CT' ? botMatCT : side === 'T' ? botMatT : botMat;
     const g = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 1.2, 10), botMat); body.position.y = 0.9; body.castShadow = true; g.add(body);
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 1.2, 10), mat); body.position.y = 0.9; body.castShadow = true; g.add(body);
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 10, 8), botMat2); head.position.y = 1.72; head.castShadow = true; g.add(head);
     const arm = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.7), gunM); arm.position.set(0.3, 1.25, -0.4); g.add(arm);
     let x, z, tries = 0;
-    do { x = (rnd() - 0.5) * (MAP.size - 16); z = (rnd() - 0.5) * (MAP.size - 16); tries++; } while ((solids.some(s => x > s.x1 - 1 && x < s.x2 + 1 && z > s.z1 - 1 && z < s.z2 + 1) || Math.hypot(x - P.x, z - P.z) < 30) && tries < 200);
+    if (at) { x = at[0]; z = at[1]; }
+    else do { x = (rnd() - 0.5) * (MAP.size - 16); z = (rnd() - 0.5) * (MAP.size - 16); tries++; } while ((solids.some(s => x > s.x1 - 1 && x < s.x2 + 1 && z > s.z1 - 1 && z < s.z2 + 1) || Math.hypot(x - P.x, z - P.z) < 30) && tries < 200);
     g.position.set(x, 0, z); scene.add(g);
-    const b = { g, body, head, x, z, hp: 100, alive: true, tx: x, tz: z, fire: 0, seen: 0, yaw: 0, hitT: 0, wander: 0 };
+    const b = { g, body, head, mat, side, x, z, hp: 100, alive: true, tx: x, tz: z, fire: 0, seen: 0, yaw: 0, hitT: 0, wander: 0, hx: x, hz: z, look: 0, defuse: 0, plantT: 0 };
     bots.push(b); return b;
   }
   function botAt(x, z) { return solids.some(s => s.y0 < 1.7 && x + 0.4 > s.x1 && x - 0.4 < s.x2 && z + 0.4 > s.z1 && z - 0.4 < s.z2); }
@@ -395,11 +561,11 @@
     if (!b.alive) return;
     const dx = P.x - b.x, dz = P.z - b.z, dist = Math.hypot(dx, dz);
     const eye = new THREE.Vector3(b.x, 1.5, b.z), peye = new THREE.Vector3(P.x, P.y + 1.5, P.z);
-    const sees = dist < 55 && !wallHit(eye, peye);
+    const sees = !P.dead && dist < 55 && !wallHit(eye, peye);
     if (sees && b.seen <= 0) b.fire = Math.max(b.fire, 0.7);              // время реакции
     b.seen = sees ? 2.0 : Math.max(0, b.seen - dt);
     if (b.seen > 0) {
-      b.yaw = Math.atan2(dx, dz);
+      b.yaw = Math.atan2(dx, dz); b.defuse = 0; b.plantT = 0;
       // держит дистанцию 8–20 м, иначе подходит/отходит
       const want = dist > 20 ? 1 : dist < 8 ? -1 : 0;
       const sp = 3.2 * want * dt, nx = b.x + dx / dist * sp, nz = b.z + dz / dist * sp;
@@ -413,7 +579,8 @@
         tracer(new THREE.Vector3(b.x, 1.3, b.z), new THREE.Vector3(P.x + (rnd() - .5) * 0.6, P.y + 1.4 + (rnd() - .5) * 0.4, P.z + (rnd() - .5) * 0.6), 0xff8a5b);
         sfx.shot(0.35, 0.8);
       }
-    } else {
+    } else if (MAP.mode === 'bomb') botTask(b, dt);
+    else {
       // патруль: новая точка раз в несколько секунд
       b.wander -= dt;
       if (b.wander <= 0 || Math.hypot(b.tx - b.x, b.tz - b.z) < 1) { b.wander = 4 + rnd() * 5; const hf = MAP.size / 2 - 4; b.tx = Math.max(-hf, Math.min(hf, b.x + (rnd() - .5) * 40)); b.tz = Math.max(-hf, Math.min(hf, b.z + (rnd() - .5) * 40)); }
@@ -423,7 +590,19 @@
       b.yaw = Math.atan2(ddx, ddz);
     }
     b.g.position.set(b.x, 0, b.z); b.g.rotation.y = b.yaw;
-    if (b.hitT > 0) { b.hitT -= dt; b.body.material = botMatHit; } else b.body.material = botMat;
+    if (b.hitT > 0) { b.hitT -= dt; b.body.material = botMatHit; } else b.body.material = b.mat;
+  }
+  // режим «Закладка»: КТ держат точки и разминируют, Т несут бомбу на точку и охраняют её
+  function botTask(b, dt) {
+    if (b.side === 'CT') {
+      if (R.phase === 'planted') {
+        if (navStep(b, R.bomb.x, R.bomb.z, 5.0, dt) < 1.3) { b.defuse += dt; R.defusing = b; if (b.defuse >= DEFUSE) roundEnd('CT', 'Бомба обезврежена'); } else b.defuse = 0;
+      } else if (navStep(b, b.hx, b.hz, 5.0, dt) < 0.8) b.yaw = b.look;
+    } else if (R.phase === 'live' && R.carrier === b) {
+      if (navStep(b, R.plant[0], R.plant[1], 3.6, dt) < 0.9) { b.plantT += dt; if (b.plantT >= PLANT) plantBomb(b.x, b.z); } else b.plantT = 0;
+    } else if (R.phase === 'live' && R.dropped && R.fetcher === b) {
+      if (navStep(b, R.dropped.x, R.dropped.z, 4.0, dt) < 1) { R.carrier = b; R.dropped = null; R.fetcher = null; bombG.visible = false; }
+    } else if (navStep(b, b.hx, b.hz, 3.6, dt) < 0.8) b.yaw = b.look;
   }
   const botMatHit = new THREE.MeshBasicMaterial({ color: 0xffd0c8 });
   function killBot(b) {
@@ -431,6 +610,16 @@
     b.g.rotation.x = Math.PI / 2; b.g.position.y = 0.4;                // «падает»
     setTimeout(() => { scene.remove(b.g); }, 4000);
     $('alive').textContent = bots.filter(x => x.alive).length;
+    if (MAP.mode === 'bomb') {
+      if (R.carrier === b) { R.carrier = null; R.dropped = { x: b.x, z: b.z }; bombG.position.set(b.x, 0.2, b.z); bombG.visible = true; bombLed.visible = false; setMsg('Т потеряли бомбу', 3); }
+      if (R.dropped && (!R.fetcher || !R.fetcher.alive)) { let best = 1e9; R.fetcher = null; for (const o of bots) if (o.alive) { const d = Math.hypot(o.x - R.dropped.x, o.z - R.dropped.z); if (d < best) { best = d; R.fetcher = o; } } }
+      if (!bots.some(x => x.alive)) {
+        if (R.side === 'T') roundEnd('T', 'Все КТ уничтожены');
+        else if (R.phase === 'live') roundEnd('CT', 'Все Т уничтожены');
+        else setMsg('Все Т уничтожены — разминируйте бомбу!', 4);
+      }
+      return;
+    }
     // новый противник появляется через пару секунд, чтобы бой не кончался
     setTimeout(() => { if (running) { spawnBot(); $('alive').textContent = bots.filter(x => x.alive).length; } }, 2500);
   }
@@ -460,8 +649,81 @@
     land() { if (!this.on) return; const ac = this.ctx, t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(120, t); o.frequency.exponentialRampToValueAtTime(50, t + 0.1); g.gain.setValueAtTime(0.25, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.12); o.connect(g).connect(ac.destination); o.start(t); o.stop(t + 0.13); },
     click() { if (!this.on) return; const ac = this.ctx, t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain(); o.type = 'square'; o.frequency.value = 1200; g.gain.setValueAtTime(0.15, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.05); o.connect(g).connect(ac.destination); o.start(t); o.stop(t + 0.06); },
     heal() { if (!this.on) return; const ac = this.ctx, t = ac.currentTime; [523, 659, 784].forEach((f, i) => { const o = ac.createOscillator(), g = ac.createGain(); o.type = 'triangle'; o.frequency.value = f; g.gain.setValueAtTime(0.0001, t + i * 0.07); g.gain.exponentialRampToValueAtTime(0.2, t + i * 0.07 + 0.02); g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.07 + 0.25); o.connect(g).connect(ac.destination); o.start(t + i * 0.07); o.stop(t + i * 0.07 + 0.3); }); },
+    beep() { if (!this.on) return; const ac = this.ctx, t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain(); o.type = 'square'; o.frequency.value = 1900; g.gain.setValueAtTime(0.1, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.08); o.connect(g).connect(ac.destination); o.start(t); o.stop(t + 0.09); },
+    boom() { if (!this.on) return; const ac = this.ctx, t = ac.currentTime, n = ac.sampleRate * 1.6, b = ac.createBuffer(1, n, ac.sampleRate), d = b.getChannelData(0); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2);
+      const s = ac.createBufferSource(); s.buffer = b; const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 420; const g = ac.createGain(); g.gain.value = 1.2; s.connect(f).connect(g).connect(ac.destination); s.start(t); },
     hit() { if (!this.on) return; const ac = this.ctx, t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(900, t); o.frequency.exponentialRampToValueAtTime(500, t + 0.08); g.gain.setValueAtTime(0.25, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.09); o.connect(g).connect(ac.destination); o.start(t); o.stop(t + 0.1); },
   };
+
+  // ── режим «Закладка»: раунд, бомба, кнопка действия ─────────────────
+  const ROUND = 115, BOMB_T = 40, PLANT = 3, DEFUSE = 5;
+  const R = { side: 'T', phase: 'off', score: [0, 0], bomb: null, bombT: 0, actT: 0, carrier: null, dropped: null, fetcher: null, plant: null, defusing: null, boomT: 0, ledT: 0, beepT: 0 };
+  const bombG = new THREE.Group();
+  { const c = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.16, 0.3), lam(0x2a2f36)); c.position.y = 0.08; c.castShadow = true; bombG.add(c);
+    const p = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.02, 0.12), lam(0x3c8d3c)); p.position.y = 0.17; bombG.add(p); }
+  const bombLed = new THREE.Mesh(new THREE.SphereGeometry(0.045, 6, 6), new THREE.MeshBasicMaterial({ color: 0xff2020 })); bombLed.position.set(0.14, 0.2, 0.08); bombG.add(bombLed);
+  bombG.visible = false; scene.add(bombG);
+  const boom = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0.8, depthWrite: false })); boom.visible = false; scene.add(boom);
+  let msgT = 0, msgText = '';
+  function setMsg(t, ttl) { msgT = ttl; if (t !== msgText) { msgText = t; $('msg').textContent = t; } }
+  function siteAt(x, z) { for (const k in MAP.sites) { const s = MAP.sites[k]; if (x > s.x1 && x < s.x2 && z > s.z1 && z < s.z2) return k; } return null; }
+  function plantBomb(x, z) {
+    R.phase = 'planted'; R.bomb = { x, z, site: siteAt(x, z) || '?' }; R.bombT = BOMB_T; R.beepT = 0; R.actT = 0; R.carrier = null; R.dropped = null;
+    bombG.position.set(x, 0.2, z); bombG.visible = true; sfx.beep();
+    // Т после закладки занимают позиции вокруг точки
+    if (R.side === 'CT') { const g = MAP.sites[R.bomb.site] ? MAP.sites[R.bomb.site].guard : []; bots.forEach((b, i) => { if (g.length) { const p = g[i % g.length]; b.hx = p[0]; b.hz = p[1]; b.look = p[2]; } }); }
+  }
+  let actShown = null;
+  function bombStep(dt, moving) {
+    // кнопка действия: Т закладывает на точке, КТ разминирует у бомбы
+    let act = null;
+    if (!P.dead && P.y < 0.5) {
+      if (R.side === 'T' && R.phase === 'live' && siteAt(P.x, P.z)) act = 'plant';
+      if (R.side === 'CT' && R.phase === 'planted' && Math.hypot(P.x - R.bomb.x, P.z - R.bomb.z) < 1.6) act = 'defuse';
+    }
+    const btn = $('plant');
+    if (act !== actShown) { actShown = act; btn.hidden = !act; if (act) btn.lastChild.textContent = act === 'plant' ? 'заложить' : 'разминировать'; }
+    if (act && (planting || keys.KeyE) && !moving && !firing) {
+      R.actT += dt;
+      if (act === 'plant' && R.actT >= PLANT) plantBomb(P.x, P.z);
+      else if (act === 'defuse' && R.actT >= DEFUSE) return roundEnd('CT', 'Бомба обезврежена');
+    } else R.actT = 0;
+    if (act) btn.style.background = R.actT > 0 ? `conic-gradient(rgba(255,176,0,.75) ${R.actT / (act === 'plant' ? PLANT : DEFUSE) * 360}deg, rgba(255,255,255,.10) 0)` : '';
+    // таймеры раунда и бомбы
+    if (R.phase === 'live') { timeLeft -= dt; if (timeLeft <= 0) { timeLeft = 0; return roundEnd('CT', 'Время вышло'); } }
+    else if (R.phase === 'planted') {
+      R.bombT -= dt; R.beepT -= dt; R.ledT -= dt;
+      if (R.beepT <= 0) { R.beepT = R.bombT > 20 ? 1 : R.bombT > 10 ? 0.5 : R.bombT > 5 ? 0.25 : 0.12; R.ledT = 0.08; sfx.beep(); }
+      bombLed.visible = R.ledT > 0;
+      if (R.bombT <= 0) { R.phase = 'boom'; R.boomT = 1.4; boom.position.set(R.bomb.x, 1, R.bomb.z); boom.visible = true; sfx.boom(); if (navigator.vibrate) navigator.vibrate(400);
+        if (Math.hypot(P.x - R.bomb.x, P.z - R.bomb.z) < 18) P.hp = 0; }
+    } else if (R.phase === 'boom') {
+      R.boomT -= dt; boom.scale.setScalar(1 + (1.4 - R.boomT) * 16); boom.material.opacity = Math.max(0, R.boomT / 1.4 * 0.8);
+      if (R.boomT <= 0) return roundEnd('T', 'Бомба взорвалась');
+    }
+    const tl = R.phase === 'live' ? timeLeft : Math.max(0, R.bombT);
+    $('time').textContent = Math.floor(tl / 60) + ':' + String(Math.floor(tl % 60)).padStart(2, '0'); $('time').classList.toggle('red', R.phase !== 'live');
+    // гибель игрока: Т после закладки досматривает раунд, в остальных случаях раунд проигран
+    if (P.hp <= 0 && !P.dead) {
+      if (R.side === 'T' && R.phase === 'planted') { P.dead = true; P.hp = 0; gun.visible = false; }
+      else if (R.phase !== 'boom') return roundEnd(R.side === 'T' ? 'CT' : 'T', 'Вы погибли');
+    }
+    if (R.phase === 'planted') {
+      if (R.defusing) setMsg(`КТ разминирует бомбу! ${Math.ceil(DEFUSE - R.defusing.defuse)}`, 0.2);
+      else if (R.side === 'CT') setMsg(`Бомба на ${R.bomb.site} — разминируйте!`, 0.2);
+      else setMsg(P.dead ? 'Вы погибли. Бомба тикает…' : `Бомба заложена на ${R.bomb.site}`, 0.2);
+    }
+  }
+  function roundEnd(winner, why) {
+    if (R.phase === 'over') return;
+    const win = winner === R.side; R.phase = 'over'; running = false; firing = false; planting = false; R.score[win ? 0 : 1]++;
+    $('overTitle').textContent = why + (win ? ' — победа!' : ' — поражение');
+    $('overScore').textContent = R.score[0] + ' : ' + R.score[1];
+    $('overSub').textContent = `счёт раундов (вы за ${R.side === 'T' ? 'Т' : 'КТ'} : боты) · убито ${kills}`;
+    $('again').textContent = 'Следующий раунд';
+    $('plant').hidden = true; actShown = null;
+    $('over').hidden = false; if (document.exitPointerLock) document.exitPointerLock();
+  }
 
   // ── стрельба игрока ───────────────────────────────────────────────────
   const fwd = new THREE.Vector3();
@@ -552,6 +814,10 @@
   $('fs').addEventListener('click', () => { const d = document.documentElement; if (document.fullscreenElement) document.exitFullscreen(); else if (d.requestFullscreen) d.requestFullscreen().catch(() => {}); });
   $('swap').addEventListener('pointerdown', e => { e.preventDefault(); swap(); });
   $('jump').addEventListener('pointerdown', e => { e.preventDefault(); jump(); });
+  let planting = false; const plantBtn = $('plant');
+  plantBtn.addEventListener('pointerdown', e => { e.preventDefault(); sfx.init(); planting = true; plantBtn.classList.add('on'); });
+  const stopPlant = () => { planting = false; plantBtn.classList.remove('on'); };
+  plantBtn.addEventListener('pointerup', stopPlant); plantBtn.addEventListener('pointercancel', stopPlant); plantBtn.addEventListener('pointerleave', stopPlant);
   // клавиатура для отладки на компьютере
   const keys = {};
   addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'KeyR') reload(); if (e.code === 'KeyQ') swap(); if (e.code === 'Space') jump(); if (e.code === 'KeyF') { firing = true; if (!WEAPONS[wi].auto) shoot(); } });
@@ -564,8 +830,8 @@
   // ── цикл ──────────────────────────────────────────────────────────────
   function step(dt) {
     // движение
-    let mx = stick.dx, mz = stick.dy;
-    if (keys.KeyW) mz -= 1; if (keys.KeyS) mz += 1; if (keys.KeyA) mx -= 1; if (keys.KeyD) mx += 1;
+    let mx = P.dead ? 0 : stick.dx, mz = P.dead ? 0 : stick.dy;
+    if (!P.dead) { if (keys.KeyW) mz -= 1; if (keys.KeyS) mz += 1; if (keys.KeyA) mx -= 1; if (keys.KeyD) mx += 1; }
     const l = Math.hypot(mx, mz); if (l > 1) { mx /= l; mz /= l; }
     const s = Math.sin(P.yaw), c = Math.cos(P.yaw);
     // вперёд по взгляду: yaw=0 смотрит в -Z
@@ -575,7 +841,7 @@
     // оружие
     cooldown = Math.max(0, cooldown - dt);
     if (reloading > 0) { reloading -= dt; if (reloading <= 0) { reloading = 0; finishReload(); } updateAmmo(); }
-    if (firing && WEAPONS[wi].auto) shoot();
+    if (firing && WEAPONS[wi].auto && !P.dead) shoot();
     gun.rotation.z = (WEAPONS[wi].melee ? -0.35 : 0) - recoil * (WEAPONS[wi].melee ? 0.5 : 0);
     knifeFlip = Math.max(0, knifeFlip - dt * 3); knifeG.rotation.x = Math.sin(knifeFlip * Math.PI) * 6.28 * 0.5; knifeG.rotation.y = knifeFlip * Math.PI * 2;
     recoil = Math.max(0, recoil - dt * 8); kickPitch *= Math.exp(-6 * dt);
@@ -583,7 +849,9 @@
     camera.position.set(P.x, P.y + 1.6 + Math.sin(performance.now() / 180) * 0.015 * (l > 0.1 && P.grounded ? 1 : 0), P.z);
     camera.rotation.set(0, 0, 0, 'YXZ'); camera.rotation.y = P.yaw; camera.rotation.x = P.pitch + kickPitch;
     const gp = GUN_POS[wi]; gun.position.set(gp[0], gp[1] + recoil * 0.02, gp[2] + recoil * 0.06);
+    if (P.dead && R.bomb) { camera.position.set(R.bomb.x + 7, 9, R.bomb.z + 7); camera.lookAt(R.bomb.x, 0.5, R.bomb.z); }   // наблюдение за бомбой
     // боты
+    R.defusing = null;
     for (const b of bots) botStep(b, dt);
     kitsStep(dt, performance.now() / 1000);
     // эффекты
@@ -591,6 +859,8 @@
     for (let i = sparks.length - 1; i >= 0; i--) { const s2 = sparks[i]; s2.t += dt; s2.m.scale.setScalar(1 + s2.t * 6); s2.m.material.opacity = 1 - s2.t * 4; if (s2.t > 0.25) { scene.remove(s2.m); sparks.splice(i, 1); } }
     // HUD и условия
     $('hpbar').style.width = Math.max(0, P.hp) + '%'; $('hpbar').style.background = P.hp > 50 ? 'var(--ok)' : P.hp > 25 ? 'var(--accent)' : 'var(--danger)'; $('hpn').textContent = Math.max(0, Math.round(P.hp));
+    if (msgT > 0) { msgT -= dt; if (msgT <= 0) setMsg('', 0); }
+    if (MAP.mode === 'bomb') return bombStep(dt, l > 0.1);
     timeLeft -= dt; $('time').textContent = Math.floor(Math.max(0, timeLeft) / 60) + ':' + String(Math.floor(Math.max(0, timeLeft) % 60)).padStart(2, '0');
     if (P.hp <= 0) gameOver(false); else if (timeLeft <= 0) gameOver(true);
   }
@@ -599,31 +869,85 @@
     running = false; firing = false;
     if (kills > best) { best = kills; try { localStorage.setItem('city.best', best); } catch (e) {} }
     $('overTitle').textContent = survived ? 'Время вышло — вы выстояли' : 'Вы погибли';
-    $('overScore').textContent = kills; $('overSub').textContent = `противников выбито · рекорд ${best}`;
+    $('overScore').textContent = kills; $('overSub').textContent = `противников выбито · рекорд ${best}`; $('again').textContent = 'Ещё раз';
     $('over').hidden = false; if (document.exitPointerLock) document.exitPointerLock();
   }
   let mapId = 'city'; try { mapId = localStorage.getItem('city.map') || 'city'; } catch (e) {} if (!MAPS[mapId]) mapId = 'city';
   if (q.get('map') && MAPS[q.get('map')]) mapId = q.get('map');
   const mapsEl = $('maps');
   for (const id in MAPS) { const b = document.createElement('button'); b.type = 'button'; b.textContent = MAPS[id].name; b.dataset.map = id; b.addEventListener('click', () => { mapId = id; try { localStorage.setItem('city.map', id); } catch (e) {} mapsUI(); }); mapsEl.appendChild(b); }
-  function mapsUI() { for (const b of mapsEl.children) b.classList.toggle('on', b.dataset.map === mapId); }
+  let side = 'T'; try { side = localStorage.getItem('city.side') === 'CT' ? 'CT' : 'T'; } catch (e) {}
+  if (q.get('side') === 'CT' || q.get('side') === 'T') side = q.get('side');
+  const sidesEl = $('sides');
+  for (const [id, label] of [['T', 'За Т — закладка'], ['CT', 'За КТ — защита']]) { const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.dataset.side = id;
+    b.addEventListener('click', () => { side = id; try { localStorage.setItem('city.side', id); } catch (e) {} mapsUI(); }); sidesEl.appendChild(b); }
+  function mapsUI() { for (const b of mapsEl.children) b.classList.toggle('on', b.dataset.map === mapId);
+    sidesEl.hidden = $('modeInfo').hidden = MAPS[mapId].mode !== 'bomb'; for (const b of sidesEl.children) b.classList.toggle('on', b.dataset.side === side); }
   mapsUI();
-  function start() {
+  function start(newMatch) {
     for (const b of bots) scene.remove(b.g); bots.length = 0;
     if (!MAP || MAP.id !== mapId) buildMap(mapId);
+    const bomb = MAP.mode === 'bomb';
+    if (bomb && (newMatch || R.side !== side)) R.score = [0, 0];
+    R.side = side; R.phase = bomb ? 'live' : 'off'; R.bomb = null; R.actT = 0; R.carrier = null; R.dropped = null; R.fetcher = null; R.defusing = null;
+    bombG.visible = false; boom.visible = false; boom.scale.setScalar(1); bombLed.visible = false; P.dead = false; gun.visible = true; $('time').classList.remove('red'); setMsg('', 0);
     P.x = MAP.spawn[0]; P.z = MAP.spawn[1]; P.yaw = MAP.spawn[2]; P.y = 0; P.vy = 0; P.grounded = true; P.pitch = 0; P.hp = 100;
+    if (bomb && side === 'CT') { [P.x, P.z] = MAP.spawnCT[0]; P.yaw = -Math.PI / 2; }
     ammo.forEach((a, i) => { a.mag = WEAPONS[i].mag; a.rest = WEAPONS[i].rest; }); wi = 0; ki = 0; knifeLayout(); gunLayout(); reloading = 0; cooldown = 0;
-    kills = 0; timeLeft = 180; $('kills').textContent = '0';
-    for (let i = 0; i < 6; i++) spawnBot(); $('alive').textContent = 6;
+    kills = 0; timeLeft = bomb ? ROUND : 180; $('kills').textContent = '0';
+    if (!bomb) for (let i = 0; i < 6; i++) spawnBot();
+    else if (side === 'T') { MAP.ctHold.forEach((h, i) => { const b = spawnBot(MAP.spawnCT[i], 'CT'); [b.hx, b.hz, b.look] = h; }); setMsg('Вы за Т: заложите бомбу на A или B', 4); }
+    else {
+      // Т выбирают точку, у первого бомба; остальные идут на позиции вокруг неё
+      const site = MAP.sites[Math.random() < 0.5 ? 'A' : 'B'];
+      R.plant = [site.cx + (Math.random() - 0.5) * 4, site.cz + (Math.random() - 0.5) * 4];
+      MAP.spawnT.forEach((p, i) => { const b = spawnBot(p, 'T'); [b.hx, b.hz, b.look] = site.guard[i % site.guard.length]; });
+      R.carrier = bots[0]; setMsg('Вы за КТ: не дайте Т заложить бомбу', 4);
+    }
+    $('alive').textContent = bots.length;
     for (const k of kits) { k.on = true; k.g.visible = true; k.t = 0; }
     updateAmmo(); $('start').hidden = true; $('over').hidden = true; running = true; sfx.init();
   }
-  $('go').addEventListener('click', start); $('again').addEventListener('click', start);
+  $('go').addEventListener('click', () => start(true)); $('again').addEventListener('click', () => start(false));
   $('menu').addEventListener('click', () => { $('over').hidden = true; $('start').hidden = false; });
   let last = 0;
   function loop(ts) { const dt = Math.min(0.05, (ts - last) / 1000 || 0.016); last = ts; if (running) step(dt); renderer.render(scene, camera); requestAnimationFrame(loop); }
   // ?sim=1 — прогон логики без экрана: игрок стоит, боты ищут его; результат в title
-  if (q.get('sim')) {
+  // ?sim=bomb — прогон режима «Закладка» на Likestone за обе стороны; итог в title
+  if (q.get('sim') === 'bomb') {
+    mapId = 'likestone'; const out = [], run = (sec, until) => { let i = 0; for (; i < sec * 60 && running && !(until && until()); i++) { scene.updateMatrixWorld(true); step(1 / 60); } return (i / 60).toFixed(1); };
+    const far = () => { P.x = 300; P.z = 300; P.y = 0; };                    // игрок вне карты — боты его не видят
+    side = 'T'; start(true);
+    const reach = (a, b) => { const f = navField(b[0], b[1]), k = navFree(navIdx(a[0], a[1])); return f && k >= 0 && f[k] < 1e9 ? Math.round(f[k]) : 'нет'; };
+    const A = [MAP.sites.A.cx, MAP.sites.A.cz], B = [MAP.sites.B.cx, MAP.sites.B.cz];
+    out.push(`путь T→A ${reach(MAP.spawn, A)} T→B ${reach(MAP.spawn, B)} CT→A ${reach(MAP.spawnCT[0], A)} CT→B ${reach(MAP.spawnCT[0], B)} м`);
+    // 1) за Т: КТ расходятся по позициям, игрок закладывает на B, уходит — КТ должны разминировать
+    far(); P.hp = 1e9;
+    let t = run(40, () => bots.every(b => Math.hypot(b.x - b.hx, b.z - b.hz) < 1));
+    if (q.get("dbg")) out.push(bots.map(b => `(${b.x.toFixed(1)},${b.z.toFixed(1)})→(${b.hx.toFixed(1)},${b.hz.toFixed(1)}) f=${(navField(b.hx, b.hz)[navFree(navIdx(b.x, b.z))] || 0).toFixed(0)}`).join(" "));
+    out.push(`КТ на позициях ${bots.filter(b => Math.hypot(b.x - b.hx, b.z - b.hz) < 1).length}/5 за ${t}с`);
+    P.x = B[0]; P.z = B[1]; planting = true; t = run(5, () => R.phase !== 'live'); planting = false; out.push(`закладка ${R.phase} за ${t}с`);
+    far(); t = run(45); out.push(`итог «${$('overTitle').textContent}» за ${t}с`);
+    // 2) за Т: КТ не двигаются — бомба должна взорваться
+    start(false); P.x = A[0]; P.z = A[1]; P.hp = 1e9; plantBomb(P.x, P.z); far(); for (const b of bots) b.alive = false;
+    t = run(45); out.push(`без разминирования «${$('overTitle').textContent}» за ${t}с`);
+    // 3) за КТ: Т несут бомбу на точку и закладывают
+    side = 'CT'; start(true); far(); P.hp = 1e9; const target = siteAt(...R.plant);
+    t = run(80, () => R.phase !== 'live'); out.push(`Т цель ${target}: ${R.phase === 'planted' ? 'заложили на ' + R.bomb.site : R.phase} за ${t}с`);
+    // 4) за КТ: убили носителя — бомбу подбирают и всё равно закладывают
+    start(false); far(); P.hp = 1e9; const tg2 = siteAt(...R.plant); run(6); killBot(R.carrier); const dropped = !!R.dropped;
+    t = run(90, () => R.phase !== 'live'); out.push(`носитель убит (бомба упала: ${dropped}), цель ${tg2}: ${R.phase === 'planted' ? 'заложили на ' + R.bomb.site : R.phase} за ${t}с`);
+    // 5) за КТ: игрок разминирует
+    if (R.phase === 'planted') { P.x = R.bomb.x + 0.5; P.z = R.bomb.z; for (const b of bots) b.alive = false; planting = true; t = run(8); planting = false; out.push(`разминирование «${$('overTitle').textContent}» за ${t}с`); }
+    document.title = 'bomb: ' + out.join(' | ');
+  }
+  // ?sim=climb — подъём по лестницам башни и балкона на Likestone
+  if (q.get('sim') === 'climb') {
+    mapId = 'likestone'; start(true); P.hp = 1e9; for (const b of bots) b.alive = false;
+    const walk = (x, z, yaw, sec) => { P.x = x; P.z = z; P.y = 0; P.vy = 0; P.yaw = yaw; keys.KeyW = true; let top = 0; for (let i = 0; i < sec * 60; i++) { step(1 / 60); top = Math.max(top, P.y); } keys.KeyW = false; return `${top.toFixed(2)} (${P.x.toFixed(1)},${P.z.toFixed(1)})`; };
+    document.title = `climb: башня ${walk(-1, 12.8, -Math.PI / 2, 3)} балкон ${walk(-17.6, -20, 0, 3)}`;
+  }
+  if (q.get('sim') && !['bomb', 'climb'].includes(q.get('sim'))) {
     start(); running = true; let shots = 0, hp0 = 100, dmgT = -1;
     // игрок на площади, первый бот в 10 м перед ним в открытом месте
     P.x = MAP.center[0]; P.z = MAP.center[1] + 22; P.yaw = 0; const b0 = bots[0]; b0.x = P.x; b0.z = P.z - 10; b0.tx = b0.x; b0.tz = b0.z; let maxY = 0, endY = 0;
@@ -647,7 +971,11 @@
     if (q.get('shot') === 'knife') { wi = 2; gunLayout(); updateAmmo(); } if (q.get('shot') === 'pistol') { wi = 1; gunLayout(); updateAmmo(); P.x = MAP.center[0] + 2.5; P.z = MAP.center[1] + 4; P.yaw = 0.6; }
     if (['k0', 'k1', 'k2'].includes(q.get('shot'))) { wi = 2; ki = +q.get('shot')[1]; knifeLayout(); gunLayout(); updateAmmo(); }
     if (q.get('shot') === 'map') { P.x = MAP.spawn[0]; P.z = MAP.spawn[1]; P.yaw = MAP.spawn[2]; P.y = 12; }
-    step(1 / 60); scene.updateMatrixWorld(true); renderer.render(scene, camera);
+    if (q.get('shot') === 'pos') { P.x = +q.get('x'); P.z = +q.get('z'); P.y = +q.get('y') || 0; P.yaw = +q.get('yaw') || 0; P.pitch = +q.get('pitch') || 0; }
+    step(1 / 60);
+    if (q.get('shot') === 'pos') { P.y = +q.get('y') || 0; camera.position.y = P.y + 1.6; }
+    if (q.get('shot') === 'top') { scene.fog = null; gun.visible = false; camera.position.set(0, +q.get('h') || 70, 0); camera.rotation.set(-Math.PI / 2, 0, 0, 'YXZ'); running = false; for (const id of ['start', 'plant']) $(id).hidden = true; }
+    scene.updateMatrixWorld(true); renderer.render(scene, camera);
   }
   if (!MAP) buildMap(mapId);
   requestAnimationFrame(loop);
